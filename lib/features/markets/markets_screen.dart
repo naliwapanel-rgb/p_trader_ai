@@ -10,7 +10,7 @@ import '../../providers/market_providers.dart';
 import 'market_details_screen.dart';
 import 'market_search_screen.dart';
 import '../watchlist/watchlist_screen.dart';
-import '../../providers/watchlist_providers.dart';
+import '../watchlist/providers/watchlist_provider.dart';
 
 class MarketsScreen extends ConsumerWidget {
   const MarketsScreen({super.key});
@@ -20,7 +20,7 @@ class MarketsScreen extends ConsumerWidget {
     final marketsAsync = ref.watch(liveMarketsProvider);
     final selectedFilter = ref.watch(marketFilterProvider);
     final searchQuery = ref.watch(marketSearchProvider);
-    final watchlistCount = ref.watch(watchlistProvider).value?.length ?? 0;
+    final watchlistCount = ref.watch(watchlistCoinIdsProvider).length;
 
     return Scaffold(
       appBar: AppBar(

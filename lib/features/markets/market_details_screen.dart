@@ -7,7 +7,7 @@ import '../../core/widgets/glass_card.dart';
 import '../../domain/entities/crypto_asset.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/watchlist_providers.dart';
+import '../watchlist/providers/watchlist_provider.dart';
 
 class MarketDetailsScreen extends ConsumerWidget {
   final CryptoAsset coin;
@@ -19,8 +19,8 @@ class MarketDetailsScreen extends ConsumerWidget {
     final isPositive = coin.priceChangePercentage24h >= 0;
     final changePrefix = isPositive ? '+' : '';
 
-    final watchlist = ref.watch(watchlistProvider);
-    final isFavorite = watchlist.value?.contains(coin.id) ?? false;
+    final watchlist = ref.watch(watchlistCoinIdsProvider);
+    final isFavorite = watchlist.contains(coin.id);
 
     return Scaffold(
       appBar: AppBar(
@@ -28,7 +28,7 @@ class MarketDetailsScreen extends ConsumerWidget {
         actions: [
           IconButton(
             onPressed: () {
-              ref.read(watchlistProvider.notifier).toggle(coin.id);
+              ref.read(watchlistCoinIdsProvider.notifier).toggleCoin(coin.id);
             },
             icon: Icon(
               isFavorite ? Icons.star : Icons.star_border,

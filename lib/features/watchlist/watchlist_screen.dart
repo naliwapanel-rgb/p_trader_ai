@@ -6,7 +6,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../providers/market_providers.dart';
-import '../../providers/watchlist_providers.dart';
+import 'providers/watchlist_provider.dart';
 import '../markets/market_details_screen.dart';
 
 class WatchlistScreen extends ConsumerWidget {
@@ -15,7 +15,7 @@ class WatchlistScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final marketsAsync = ref.watch(liveMarketsProvider);
-    final watchlistAsync = ref.watch(watchlistProvider);
+    final watchlistIds = ref.watch(watchlistCoinIdsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Watchlist')),
@@ -29,9 +29,8 @@ class WatchlistScreen extends ConsumerWidget {
           ),
         ),
         data: (coins) {
-          final ids = watchlistAsync.value ?? [];
           final watchlistCoins = coins
-              .where((coin) => ids.contains(coin.id))
+              .where((coin) => watchlistIds.contains(coin.id))
               .toList();
 
           if (watchlistCoins.isEmpty) {
@@ -99,8 +98,8 @@ class WatchlistScreen extends ConsumerWidget {
                         IconButton(
                           onPressed: () {
                             ref
-                                .read(watchlistProvider.notifier)
-                                .toggle(coin.id);
+                                .read(watchlistCoinIdsProvider.notifier)
+                                .toggleCoin(coin.id);
                           },
                           icon: const Icon(Icons.star, color: Colors.amber),
                         ),

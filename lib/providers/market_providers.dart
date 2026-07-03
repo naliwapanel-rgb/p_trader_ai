@@ -9,13 +9,15 @@ import '../domain/entities/crypto_asset.dart';
 import '../domain/repositories/market_repository.dart';
 import '../domain/usecases/get_top_markets.dart';
 import 'dart:async';
+import '../core/providers/local_storage_provider.dart';
 
 final dioClientProvider = Provider<DioClient>((ref) {
   return DioClient();
 });
 
 final marketCacheServiceProvider = Provider<MarketCacheService>((ref) {
-  return MarketCacheService();
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return MarketCacheService(prefs);
 });
 
 final marketRemoteDataSourceProvider = Provider<MarketRemoteDataSource>((ref) {

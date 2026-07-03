@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -7,18 +8,25 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/section_title.dart';
 import '../../core/widgets/coin_logo.dart';
+import 'providers/portfolio_provider.dart';
+import 'data/portfolio_holding.dart';
+import '../../providers/market_providers.dart';
 
-class PortfolioScreen extends StatelessWidget {
+class PortfolioScreen extends ConsumerWidget {
   const PortfolioScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final marketsAsync = ref.watch(liveMarketsProvider);
+    final holdings = ref.watch(portfolioHoldingsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Portfolio'),
         actions: [
           IconButton(
-            onPressed: () {},
+            onPressed: () {
+              _showAddHoldingDialog(context, ref);
+            },
             icon: const Icon(Icons.add_circle_outline),
           ),
         ],
@@ -28,17 +36,64 @@ class PortfolioScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _balanceCard(),
+            marketsAsync.when(
+              loading: () => _balanceCard(
+                totalValue: 0,
+                totalProfit: 0,
+                profitPercentage: 0,
+              ),
+              error: (error, stackTrace) => _balanceCard(
+                totalValue: 0,
+                totalProfit: 0,
+                profitPercentage: 0,
+              ),
+              data: (coins) {
+                double totalValue = 0;
+                double totalCost = 0;
+
+                for (final holding in holdings) {
+                  final coin = coins.cast<dynamic>().firstWhere(
+                    (c) => c.id == holding.coinId,
+                    orElse: () => null,
+                  );
+
+                  final price = coin?.currentPrice ?? holding.averageBuyPrice;
+
+                  totalValue += holding.amount * price;
+                  totalCost += holding.amount * holding.averageBuyPrice;
+                }
+
+                final totalProfit = totalValue - totalCost;
+
+                final profitPercentage = totalCost == 0
+                    ? 0.0
+                    : (totalProfit / totalCost) * 100;
+
+                return _balanceCard(
+                  totalValue: totalValue,
+                  totalProfit: totalProfit,
+                  profitPercentage: profitPercentage,
+                );
+              },
+            ),
             const SizedBox(height: AppSpacing.lg),
 
             const SectionTitle('Portfolio Allocation'),
             const SizedBox(height: AppSpacing.sm),
-            _allocationCard(),
+            marketsAsync.when(
+              loading: () => _allocationCard(holdings, const []),
+              error: (error, stackTrace) => _allocationCard(holdings, const []),
+              data: (coins) => _allocationCard(holdings, coins),
+            ),
 
             const SizedBox(height: AppSpacing.lg),
             const SectionTitle('Assets'),
             const SizedBox(height: AppSpacing.sm),
-            _assetList(),
+            marketsAsync.when(
+              loading: () => _assetList(holdings, const []),
+              error: (error, stackTrace) => _assetList(holdings, const []),
+              data: (coins) => _assetList(holdings, coins),
+            ),
 
             const SizedBox(height: AppSpacing.lg),
             const SectionTitle('Recent Transactions'),
@@ -52,14 +107,116 @@ class PortfolioScreen extends StatelessWidget {
     );
   }
 
-  Widget _balanceCard() {
+  void _showAddHoldingDialog(BuildContext context, WidgetRef ref) {
+    final coinIdController = TextEditingController();
+    final symbolController = TextEditingController();
+    final amountController = TextEditingController();
+    final averageBuyPriceController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Holding'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: coinIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Coin ID',
+                  hintText: 'bitcoin',
+                ),
+              ),
+              TextField(
+                controller: symbolController,
+                decoration: const InputDecoration(
+                  labelText: 'Symbol',
+                  hintText: 'BTC',
+                ),
+              ),
+              TextField(
+                controller: amountController,
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  hintText: '0.25',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              TextField(
+                controller: averageBuyPriceController,
+                decoration: const InputDecoration(
+                  labelText: 'Average Buy Price',
+                  hintText: '65000',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final coinId = coinIdController.text.trim().toLowerCase();
+                final symbol = symbolController.text.trim().toUpperCase();
+                final amount = double.tryParse(amountController.text.trim());
+                final averageBuyPrice = double.tryParse(
+                  averageBuyPriceController.text.trim(),
+                );
+
+                if (coinId.isEmpty ||
+                    symbol.isEmpty ||
+                    amount == null ||
+                    averageBuyPrice == null ||
+                    amount <= 0 ||
+                    averageBuyPrice <= 0) {
+                  return;
+                }
+
+                final holding = PortfolioHolding(
+                  coinId: coinId,
+                  symbol: symbol,
+                  name: symbol,
+                  amount: amount,
+                  averageBuyPrice: averageBuyPrice,
+                );
+
+                await ref
+                    .read(portfolioHoldingsProvider.notifier)
+                    .addHolding(holding);
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _balanceCard({
+    required double totalValue,
+    required double totalProfit,
+    required double profitPercentage,
+  }) {
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Total Balance', style: AppTextStyles.body),
           const SizedBox(height: AppSpacing.sm),
-          const Text('\$14,250.00', style: AppTextStyles.heading),
+          Text(
+            '\$${totalValue.toStringAsFixed(2)}',
+            style: AppTextStyles.heading,
+          ),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
@@ -72,8 +229,8 @@ class PortfolioScreen extends StatelessWidget {
                   color: AppColors.success.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(50),
                 ),
-                child: const Text(
-                  '+\$235.00',
+                child: Text(
+                  '+\$${totalProfit.toStringAsFixed(2)}',
                   style: TextStyle(
                     color: AppColors.success,
                     fontWeight: FontWeight.bold,
@@ -81,7 +238,10 @@ class PortfolioScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              const Text('+1.67% today', style: AppTextStyles.body),
+              Text(
+                '${profitPercentage >= 0 ? "+" : ""}${profitPercentage.toStringAsFixed(2)}%',
+                style: AppTextStyles.body,
+              ),
             ],
           ),
         ],
@@ -89,14 +249,49 @@ class PortfolioScreen extends StatelessWidget {
     );
   }
 
-  Widget _allocationCard() {
-    final items = [
-      _AllocationItem('BTC', '45%', AppColors.primary),
-      _AllocationItem('ETH', '25%', AppColors.secondary),
-      _AllocationItem('SOL', '15%', AppColors.success),
-      _AllocationItem('XRP', '10%', AppColors.warning),
-      _AllocationItem('Cash', '5%', AppColors.textSecondary),
+  Widget _allocationCard(List<PortfolioHolding> holdings, List coins) {
+    if (holdings.isEmpty) {
+      return AppCard(
+        child: Text(
+          'Add holdings to see your portfolio allocation.',
+          style: AppTextStyles.body,
+        ),
+      );
+    }
+
+    final colors = [
+      AppColors.primary,
+      AppColors.secondary,
+      AppColors.success,
+      AppColors.warning,
+      AppColors.textSecondary,
     ];
+
+    final allocationItems = holdings.map((holding) {
+      final coin = coins.cast<dynamic>().firstWhere(
+        (item) => item.id == holding.coinId,
+        orElse: () => null,
+      );
+
+      final price = coin?.currentPrice ?? holding.averageBuyPrice;
+      final value = holding.amount * price;
+
+      return {'symbol': holding.symbol, 'value': value};
+    }).toList();
+
+    final totalValue = allocationItems.fold<double>(
+      0,
+      (sum, item) => sum + (item['value'] as double),
+    );
+
+    final portfolioAllocation = allocationItems.map((item) {
+      final value = item['value'] as double;
+
+      return {
+        'symbol': item['symbol'] as String,
+        'percentage': totalValue == 0 ? 0.0 : (value / totalValue) * 100,
+      };
+    }).toList();
 
     return AppCard(
       child: Column(
@@ -107,60 +302,32 @@ class PortfolioScreen extends StatelessWidget {
               PieChartData(
                 centerSpaceRadius: 58,
                 sectionsSpace: 3,
-                sections: [
-                  PieChartSectionData(
-                    value: 45,
-                    color: AppColors.primary,
-                    title: 'BTC',
+                sections: portfolioAllocation.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final percentage = item['percentage'] as double;
+
+                  return PieChartSectionData(
+                    value: percentage,
+                    color: colors[index % colors.length],
+                    title: item['symbol'].toString(),
                     radius: 54,
                     titleStyle: const TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.bold,
                     ),
-                  ),
-                  PieChartSectionData(
-                    value: 25,
-                    color: AppColors.secondary,
-                    title: 'ETH',
-                    radius: 50,
-                    titleStyle: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  PieChartSectionData(
-                    value: 15,
-                    color: AppColors.success,
-                    title: 'SOL',
-                    radius: 46,
-                    titleStyle: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  PieChartSectionData(
-                    value: 10,
-                    color: AppColors.warning,
-                    title: 'XRP',
-                    radius: 42,
-                    titleStyle: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  PieChartSectionData(
-                    value: 5,
-                    color: AppColors.textSecondary,
-                    title: '',
-                    radius: 38,
-                  ),
-                ],
+                  );
+                }).toList(),
               ),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
           Column(
-            children: items.map((item) {
+            children: portfolioAllocation.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final percentage = item['percentage'] as double;
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: Row(
@@ -169,14 +336,19 @@ class PortfolioScreen extends StatelessWidget {
                       height: 10,
                       width: 10,
                       decoration: BoxDecoration(
-                        color: item.color,
+                        color: colors[index % colors.length],
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: Text(item.name, style: AppTextStyles.body)),
+                    Expanded(
+                      child: Text(
+                        item['symbol'].toString(),
+                        style: AppTextStyles.body,
+                      ),
+                    ),
                     Text(
-                      item.percent,
+                      '${percentage.toStringAsFixed(1)}%',
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.bold,
@@ -192,63 +364,57 @@ class PortfolioScreen extends StatelessWidget {
     );
   }
 
-  Widget _assetList() {
-    final assets = [
-      {
-        'symbol': 'BTC',
-        'name': 'Bitcoin',
-        'amount': '0.245 BTC',
-        'value': '\$10,830',
-        'profit': '+\$1,245',
-        'positive': true,
-      },
-      {
-        'symbol': 'ETH',
-        'name': 'Ethereum',
-        'amount': '3.52 ETH',
-        'value': '\$2,630',
-        'profit': '+\$420',
-        'positive': true,
-      },
-      {
-        'symbol': 'SOL',
-        'name': 'Solana',
-        'amount': '25.1 SOL',
-        'value': '\$154',
-        'profit': '-\$36',
-        'positive': false,
-      },
-      {
-        'symbol': 'XRP',
-        'name': 'Ripple',
-        'amount': '530 XRP',
-        'value': '\$0.51',
-        'profit': '+\$18',
-        'positive': true,
-      },
-    ];
+  Widget _assetList(List<PortfolioHolding> holdings, List coins) {
+    coins;
+    if (holdings.isEmpty) {
+      return AppCard(
+        child: Column(
+          children: [
+            const Icon(Icons.account_balance_wallet_outlined, size: 48),
+            const SizedBox(height: AppSpacing.md),
+            Text('No holdings yet', style: AppTextStyles.title),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Tap the plus button to add your first portfolio asset.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body,
+            ),
+          ],
+        ),
+      );
+    }
 
     return Column(
-      children: assets.map((asset) {
-        final positive = asset['positive'] as bool;
+      children: holdings.map((holding) {
+        final coin = coins.cast<dynamic>().firstWhere(
+          (item) => item.id == holding.coinId,
+          orElse: () => null,
+        );
 
+        final currentPrice = coin?.currentPrice ?? holding.averageBuyPrice;
+
+        final currentValue = holding.amount * currentPrice;
+        final costBasis = holding.amount * holding.averageBuyPrice;
+        final profitLoss = currentValue - costBasis;
+        final profitLossPercentage = costBasis == 0
+            ? 0
+            : (profitLoss / costBasis) * 100;
+
+        final isProfit = profitLoss >= 0;
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: AppCard(
             child: Row(
               children: [
-                CoinLogo(symbol: asset['symbol'].toString().toLowerCase()),
+                CoinLogo(symbol: holding.symbol.toLowerCase()),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(holding.symbol, style: AppTextStyles.title),
                       Text(
-                        asset['symbol'].toString(),
-                        style: AppTextStyles.title,
-                      ),
-                      Text(
-                        asset['amount'].toString(),
+                        '${holding.amount} ${holding.symbol}',
                         style: AppTextStyles.body,
                       ),
                     ],
@@ -257,12 +423,24 @@ class PortfolioScreen extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(asset['value'].toString(), style: AppTextStyles.title),
                     Text(
-                      asset['profit'].toString(),
+                      'Value \$${currentValue.toStringAsFixed(2)}',
+                      style: AppTextStyles.title,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${isProfit ? "+" : ""}\$${profitLoss.toStringAsFixed(2)} '
+                      '(${profitLossPercentage.toStringAsFixed(2)}%)',
                       style: TextStyle(
-                        color: positive ? AppColors.success : AppColors.danger,
+                        color: isProfit ? AppColors.success : AppColors.danger,
                         fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Avg \$${holding.averageBuyPrice.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
                       ),
                     ),
                   ],
@@ -347,12 +525,4 @@ class PortfolioScreen extends StatelessWidget {
       }).toList(),
     );
   }
-}
-
-class _AllocationItem {
-  final String name;
-  final String percent;
-  final Color color;
-
-  const _AllocationItem(this.name, this.percent, this.color);
 }
