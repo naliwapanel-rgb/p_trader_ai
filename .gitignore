@@ -24,3 +24,38 @@ macos/Pods/
 
 # Generated
 coverage/
+# ----------------------------
+# Python
+# ----------------------------
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/*.db
+backend/*.sqlite3
+backend/.pytest_cache/
+backend/.mypy_cache/
+
+# Environment variables
+backend/.env
+
+# Logs
+backend/*.log
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+
+# Android
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
