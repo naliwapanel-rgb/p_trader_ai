@@ -12,6 +12,10 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./p_trader_ai.db"
 
+    secret_key: str = "CHANGE_ME_IN_PRODUCTION"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
