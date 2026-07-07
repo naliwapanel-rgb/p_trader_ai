@@ -41,4 +41,32 @@ class PortfolioRepository:
         self.db.refresh(portfolio)
 
         return portfolio
-    
+
+    def update(
+        self,
+        portfolio: Portfolio,
+        name: str | None = None,
+        base_currency: str | None = None,
+        total_value: float | None = None,
+        profit_loss: float | None = None,
+    ) -> Portfolio:
+        if name is not None:
+            portfolio.name = name
+
+        if base_currency is not None:
+            portfolio.base_currency = base_currency
+
+        if total_value is not None:
+            portfolio.total_value = total_value
+
+        if profit_loss is not None:
+            portfolio.profit_loss = profit_loss
+
+        self.db.commit()
+        self.db.refresh(portfolio)
+
+        return portfolio
+
+    def delete(self, portfolio: Portfolio) -> None:
+        self.db.delete(portfolio)
+        self.db.commit()
