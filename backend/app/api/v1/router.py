@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     alerts,
     auth,
+    exchange_accounts,
     health,
     notification_preferences,
     portfolios,
@@ -19,3 +20,4 @@ api_router.include_router(portfolios.router)
 api_router.include_router(watchlists.router)
 api_router.include_router(alerts.router)
 api_router.include_router(notification_preferences.router)
+api_router.include_router(exchange_accounts.router)

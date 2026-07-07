@@ -13,14 +13,17 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./p_trader_ai.db"
 
     secret_key: str = "CHANGE_ME_IN_PRODUCTION"
+    encryption_key: str = "CHANGE_ME_ENCRYPTION_KEY"
+
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+
     backend_cors_origins: list[str] = [
-    "http://localhost",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:8000",
-]
+        "http://localhost",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+    ]
 
     model_config = SettingsConfigDict(
         env_file=".env",
