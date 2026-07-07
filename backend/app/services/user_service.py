@@ -55,3 +55,9 @@ class UserService:
             user=current_user,
             hashed_password=new_hashed_password,
         )
+
+    def deactivate_account(
+        self,
+        current_user: User,
+    ) -> User:
+        return self.user_repository.deactivate(current_user)  

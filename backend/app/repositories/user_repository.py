@@ -59,3 +59,14 @@ class UserRepository:
         self.db.refresh(user)
 
         return user
+    
+    def deactivate(
+        self,
+        user: User,
+    ) -> User:
+        user.is_active = False
+
+        self.db.commit()
+        self.db.refresh(user)
+
+        return user

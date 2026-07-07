@@ -58,3 +58,13 @@ async def update_my_password(
     return success_response(
         message="Password updated successfully",
     )
+@router.delete("/me")
+async def deactivate_my_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    UserService(db).deactivate_account(current_user)
+
+    return success_response(
+        message="Account deactivated successfully",
+    )
