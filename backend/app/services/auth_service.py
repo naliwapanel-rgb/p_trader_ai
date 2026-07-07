@@ -28,7 +28,7 @@ class AuthService:
             hashed_password=hashed_password,
         )
 
-        token = create_access_token(subject=user.email)
+        token = create_access_token(subject=str(user.id))
 
         return TokenResponse(access_token=token)
 
@@ -41,6 +41,6 @@ class AuthService:
                 detail="Invalid email or password",
             )
 
-        token = create_access_token(subject=user.email)
+        token = create_access_token(subject=str(user.id))
 
         return TokenResponse(access_token=token)
