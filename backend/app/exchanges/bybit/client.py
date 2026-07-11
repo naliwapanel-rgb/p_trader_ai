@@ -1,7 +1,8 @@
 import httpx
+from fastapi import HTTPException, status
 
 from app.exchanges.base import BaseExchangeClient
-
+from app.exchanges.bybit.auth import BybitAuth
 
 class BybitClient(BaseExchangeClient):
     def __init__(
@@ -13,18 +14,50 @@ class BybitClient(BaseExchangeClient):
         self.api_key = api_key
         self.api_secret = api_secret
         self.is_testnet = is_testnet
+
         self.base_url = (
             "https://api-testnet.bybit.com"
             if is_testnet
             else "https://api.bybit.com"
         )
 
+        self.auth = BybitAuth(
+            api_key=api_key,
+            api_secret=api_secret,
+        )
+
     async def test_connection(self):
         return await self.get_ticker("BTCUSDT")
 
     async def get_account_balance(self):
-        raise NotImplementedError
-
+        endpoint = "/v5/account/wallet-balance"
+        query = "accountType=UNIFIED"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(
+                    self.base_url + endpoint,
+                    params={"accountType": "UNIFIED"},
+                    headers=self.auth.headers(query),
+                )
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Unable to connect to Bybit: {exc}",
+            ) from exc
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Bybit returned an invalid response",
+            ) from exc
+        if response.status_code >= 400 or payload.get("retCode") != 0:
+            message = payload.get("retMsg") or "Request failed"
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Bybit API error: {message}",
+            )
+        return payload.get("result", {})
     async def get_positions(self):
         raise NotImplementedError
 
@@ -47,8 +80,7 @@ class BybitClient(BaseExchangeClient):
             if payload.get("retCode") != 0:
                 raise RuntimeError(payload.get("retMsg", "Bybit API error"))
 
-            result = payload.get("result", {})
-            items = result.get("list", [])
+            items = payload.get("result", {}).get("list", [])
 
             if not items:
                 raise RuntimeError("Ticker not found")
@@ -72,7 +104,13 @@ class BybitClient(BaseExchangeClient):
     async def place_market_order(self, symbol: str, side: str, quantity: float):
         raise NotImplementedError
 
-    async def place_limit_order(self, symbol: str, side: str, quantity: float, price: float):
+    async def place_limit_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        price: float,
+    ):
         raise NotImplementedError
 
     async def cancel_order(self, symbol: str, order_id: str):

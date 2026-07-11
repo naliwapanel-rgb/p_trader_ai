@@ -30,3 +30,22 @@ async def test_exchange_connection(
         message="Exchange connection tested successfully",
         data=result,
     )
+    
+@router.get("/{account_id}/balance")
+async def get_exchange_balance(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+
+    client = ExchangeFactory.create_client(account)
+    result = await client.get_account_balance()
+
+    return success_response(
+        message="Exchange balance retrieved successfully",
+        data=result,
+    )
