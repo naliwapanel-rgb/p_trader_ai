@@ -5,6 +5,11 @@ from fastapi import HTTPException, status
 
 from app.exchanges.base import BaseExchangeClient
 from app.exchanges.bybit.auth import BybitAuth
+from app.exchanges.utils import to_float
+from app.schemas.exchange_balance import (
+    ExchangeBalance,
+    ExchangeCoinBalance,
+)
 
 
 class BybitClient(BaseExchangeClient):
@@ -96,7 +101,7 @@ class BybitClient(BaseExchangeClient):
             "is_testnet": self.is_testnet,
         }
 
-    async def get_account_balance(self):
+    async def get_account_balance(self) -> dict:
         payload = await self._private_get(
             endpoint="/v5/account/wallet-balance",
             params={
@@ -104,7 +109,64 @@ class BybitClient(BaseExchangeClient):
             },
         )
 
-        return payload.get("result", {})
+        result = payload.get("result", {})
+        accounts = result.get("list", [])
+
+        if not accounts:
+            return ExchangeBalance(
+                exchange="BYBIT",
+                account_type="UNIFIED",
+            ).model_dump()
+
+        account = accounts[0]
+
+        coins = [
+            ExchangeCoinBalance(
+                coin=coin_data.get("coin", ""),
+                equity=to_float(coin_data.get("equity")),
+                wallet_balance=to_float(
+                    coin_data.get("walletBalance")
+                ),
+                available_balance=to_float(
+                    coin_data.get("availableToWithdraw")
+                    or coin_data.get("availableBalance")
+                ),
+                locked_balance=to_float(
+                    coin_data.get("locked")
+                ),
+                usd_value=to_float(
+                    coin_data.get("usdValue")
+                ),
+                unrealized_pnl=to_float(
+                    coin_data.get("unrealisedPnl")
+                ),
+            )
+            for coin_data in account.get("coin", [])
+            if coin_data.get("coin")
+        ]
+
+        balance = ExchangeBalance(
+            exchange="BYBIT",
+            account_type=account.get(
+                "accountType",
+                "UNIFIED",
+            ),
+            total_equity_usd=to_float(
+                account.get("totalEquity")
+            ),
+            total_wallet_balance_usd=to_float(
+                account.get("totalWalletBalance")
+            ),
+            total_available_balance_usd=to_float(
+                account.get("totalAvailableBalance")
+            ),
+            total_unrealized_pnl_usd=to_float(
+                account.get("totalPerpUPL")
+            ),
+            coins=coins,
+        )
+
+        return balance.model_dump()
 
     async def get_positions(self):
         raise NotImplementedError

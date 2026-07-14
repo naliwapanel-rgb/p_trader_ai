@@ -43,7 +43,9 @@ async def get_exchange_balance(
     )
 
     client = ExchangeFactory.create_client(account)
+
     result = await client.get_account_balance()
+    
 
     return success_response(
         message="Exchange balance retrieved successfully",
