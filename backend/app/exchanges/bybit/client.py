@@ -16,6 +16,14 @@ from app.schemas.exchange_position import (
     ExchangePosition,
     ExchangePositionList,
 )
+from decimal import Decimal
+
+from app.exchanges.decimal_utils import (
+    decimal_to_plain_string,
+    is_step_aligned,
+    to_decimal,
+)
+from app.schemas.exchange_instrument import ExchangeInstrumentRules
 from app.schemas.exchange_order import (
     ExchangeOrder,
     ExchangeOrderList,
@@ -541,11 +549,230 @@ class BybitClient(BaseExchangeClient):
             "low_24h": float(ticker.get("lowPrice24h") or 0),
             "volume_24h": float(ticker.get("volume24h") or 0),
         }
+    
+    async def get_instrument_rules(
+        self,
+        symbol: str,
+        category: str = "linear",
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_category = category.lower()
 
+        supported_categories = {
+            "spot",
+            "linear",
+            "inverse",
+            "option",
+        }
+
+        if normalized_category not in supported_categories:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported Bybit instrument category",
+            )
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.get(
+                    f"{self.base_url}/v5/market/instruments-info",
+                    params={
+                        "category": normalized_category,
+                        "symbol": normalized_symbol,
+                    },
+                )
+        except httpx.TimeoutException as exc:
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Bybit instrument request timed out",
+            ) from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Unable to connect to Bybit: {exc}",
+            ) from exc
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Bybit returned invalid instrument data",
+            ) from exc
+
+        if response.status_code >= 400 or payload.get("retCode") != 0:
+            message = payload.get("retMsg") or "Request failed"
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Bybit API error: {message}",
+            )
+
+        instruments = payload.get("result", {}).get("list", [])
+
+        if not instruments:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bybit instrument not found",
+            )
+
+        instrument = instruments[0]
+        price_filter = instrument.get("priceFilter", {})
+        lot_size_filter = instrument.get("lotSizeFilter", {})
+
+        rules = ExchangeInstrumentRules(
+            exchange="BYBIT",
+            category=normalized_category,
+            symbol=instrument.get(
+                "symbol",
+                normalized_symbol,
+            ),
+            status=instrument.get("status", ""),
+            base_coin=instrument.get("baseCoin", ""),
+            quote_coin=instrument.get("quoteCoin", ""),
+            settle_coin=instrument.get("settleCoin", ""),
+            min_price=to_decimal(
+                price_filter.get("minPrice")
+            ),
+            max_price=to_decimal(
+                price_filter.get("maxPrice")
+            ),
+            tick_size=to_decimal(
+                price_filter.get("tickSize")
+            ),
+            min_order_quantity=to_decimal(
+                lot_size_filter.get("minOrderQty")
+            ),
+            max_limit_order_quantity=to_decimal(
+                lot_size_filter.get("maxOrderQty")
+            ),
+            max_market_order_quantity=to_decimal(
+                lot_size_filter.get("maxMktOrderQty")
+            ),
+            quantity_step=to_decimal(
+                lot_size_filter.get("qtyStep")
+            ),
+            min_notional_value=to_decimal(
+                lot_size_filter.get("minNotionalValue")
+            ),
+        )
+
+        return rules.model_dump()
 
     async def get_orderbook(self, symbol: str):
         raise NotImplementedError
 
+    @staticmethod
+    def _validate_quantity_against_rules(
+        quantity: Decimal,
+        rules: ExchangeInstrumentRules,
+        order_type: str,
+    ) -> None:
+        if quantity <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Order quantity must be greater than zero",
+            )
+
+        if (
+            rules.min_order_quantity > 0
+            and quantity < rules.min_order_quantity
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Order quantity is below Bybit minimum of "
+                    f"{rules.min_order_quantity}"
+                ),
+            )
+
+        maximum_quantity = (
+            rules.max_market_order_quantity
+            if order_type == "MARKET"
+            else rules.max_limit_order_quantity
+        )
+
+        if maximum_quantity > 0 and quantity > maximum_quantity:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Order quantity exceeds Bybit maximum of "
+                    f"{maximum_quantity}"
+                ),
+            )
+
+        if not is_step_aligned(
+            quantity,
+            rules.quantity_step,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Order quantity must align with Bybit quantity "
+                    f"step {rules.quantity_step}"
+                ),
+            )
+
+    @staticmethod
+    def _validate_limit_price_against_rules(
+        price: Decimal,
+        rules: ExchangeInstrumentRules,
+    ) -> None:
+        if price <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Limit price must be greater than zero",
+            )
+
+        if rules.min_price > 0 and price < rules.min_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Limit price is below Bybit minimum of "
+                    f"{rules.min_price}"
+                ),
+            )
+
+        if rules.max_price > 0 and price > rules.max_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Limit price exceeds Bybit maximum of "
+                    f"{rules.max_price}"
+                ),
+            )
+
+        if not is_step_aligned(
+            price,
+            rules.tick_size,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Limit price must align with Bybit tick size "
+                    f"{rules.tick_size}"
+                ),
+            )
+
+    @staticmethod
+    def _validate_minimum_notional(
+        quantity: Decimal,
+        price: Decimal,
+        rules: ExchangeInstrumentRules,
+    ) -> None:
+        notional = quantity * price
+
+        if (
+            rules.min_notional_value > 0
+            and notional < rules.min_notional_value
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Order notional value is below Bybit minimum of "
+                    f"{rules.min_notional_value}"
+                ),
+            )
+        
     async def place_market_order(
         self,
         symbol: str,
@@ -561,13 +788,28 @@ class BybitClient(BaseExchangeClient):
         normalized_symbol = symbol.upper()
         normalized_side = side.upper()
         bybit_side = "Buy" if normalized_side == "BUY" else "Sell"
+        rules_data = await self.get_instrument_rules(
+            symbol=normalized_symbol,
+            category=category,
+        )
 
+        rules = ExchangeInstrumentRules.model_validate(
+            rules_data
+        )
+
+        quantity_decimal = to_decimal(quantity)
+
+        self._validate_quantity_against_rules(
+            quantity=quantity_decimal,
+            rules=rules,
+            order_type="MARKET",
+        )
         body = {
             "category": category.lower(),
             "symbol": normalized_symbol,
             "side": bybit_side,
             "orderType": "Market",
-            "qty": str(quantity),
+            "qty": decimal_to_plain_string(quantity_decimal),
             "timeInForce": time_in_force,
             "reduceOnly": reduce_only,
             "closeOnTrigger": close_on_trigger,
@@ -629,14 +871,41 @@ class BybitClient(BaseExchangeClient):
         normalized_symbol = symbol.upper()
         normalized_side = side.upper()
         bybit_side = "Buy" if normalized_side == "BUY" else "Sell"
+        rules_data = await self.get_instrument_rules(
+            symbol=normalized_symbol,
+            category=category,
+        )
 
+        rules = ExchangeInstrumentRules.model_validate(
+            rules_data
+        )
+
+        quantity_decimal = to_decimal(quantity)
+        price_decimal = to_decimal(price)
+
+        self._validate_quantity_against_rules(
+            quantity=quantity_decimal,
+            rules=rules,
+            order_type="LIMIT",
+        )
+
+        self._validate_limit_price_against_rules(
+            price=price_decimal,
+            rules=rules,
+        )
+
+        self._validate_minimum_notional(
+            quantity=quantity_decimal,
+            price=price_decimal,
+            rules=rules,
+        )
         body = {
             "category": category.lower(),
             "symbol": normalized_symbol,
             "side": bybit_side,
             "orderType": "Limit",
-            "qty": str(quantity),
-            "price": str(price),
+            "qty": decimal_to_plain_string(quantity_decimal),
+            "price": decimal_to_plain_string(price_decimal),
             "timeInForce": time_in_force,
             "reduceOnly": reduce_only,
             "closeOnTrigger": close_on_trigger,

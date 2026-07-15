@@ -1,8 +1,29 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 
 from app.exchanges.bybit.client import BybitClient
+
+
+def valid_linear_rules() -> dict:
+    return {
+        "exchange": "BYBIT",
+        "category": "linear",
+        "symbol": "BTCUSDT",
+        "status": "Trading",
+        "base_coin": "BTC",
+        "quote_coin": "USDT",
+        "settle_coin": "USDT",
+        "min_price": "0.1",
+        "max_price": "1000000",
+        "tick_size": "0.1",
+        "min_order_quantity": "0.001",
+        "max_limit_order_quantity": "100",
+        "max_market_order_quantity": "50",
+        "quantity_step": "0.001",
+        "min_notional_value": "5",
+    }
 
 
 @pytest.mark.asyncio
@@ -13,6 +34,9 @@ async def test_market_order_dry_run_does_not_call_bybit():
         is_testnet=False,
     )
 
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
     client._private_post = AsyncMock()
 
     result = await client.place_market_order(
@@ -44,6 +68,9 @@ async def test_limit_order_dry_run_does_not_call_bybit():
         is_testnet=False,
     )
 
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
     client._private_post = AsyncMock()
 
     result = await client.place_limit_order(
@@ -78,6 +105,9 @@ async def test_market_order_live_mode_builds_correct_bybit_body():
         is_testnet=False,
     )
 
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
     client._private_post = AsyncMock(
         return_value={
             "retCode": 0,
@@ -127,6 +157,9 @@ async def test_limit_order_live_mode_builds_correct_bybit_body():
         is_testnet=False,
     )
 
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
     client._private_post = AsyncMock(
         return_value={
             "retCode": 0,
@@ -169,3 +202,108 @@ async def test_limit_order_live_mode_builds_correct_bybit_body():
     assert result["order_id"] == "bybit-order-456"
     assert result["accepted"] is True
     assert result["dry_run"] is False
+
+
+@pytest.mark.asyncio
+async def test_market_order_rejects_quantity_below_minimum():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+    client._private_post = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await client.place_market_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            quantity=0.0005,
+            dry_run=True,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "below Bybit minimum" in exc_info.value.detail
+
+    client._private_post.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_limit_order_rejects_invalid_quantity_step():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+    client._private_post = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await client.place_limit_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            quantity=0.0015,
+            price=10000,
+            dry_run=True,
+        )
+
+    assert "quantity step" in exc_info.value.detail
+    client._private_post.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_limit_order_rejects_invalid_tick_size():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+    client._private_post = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await client.place_limit_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            quantity=0.001,
+            price=10000.05,
+            dry_run=True,
+        )
+
+    assert "tick size" in exc_info.value.detail
+    client._private_post.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_limit_order_rejects_below_min_notional():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+    client._private_post = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await client.place_limit_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            quantity=0.001,
+            price=1000,
+            dry_run=True,
+        )
+
+    assert "notional value" in exc_info.value.detail
+    client._private_post.assert_not_awaited()
