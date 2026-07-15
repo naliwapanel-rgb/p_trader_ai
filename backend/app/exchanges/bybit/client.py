@@ -10,6 +10,10 @@ from app.schemas.exchange_balance import (
     ExchangeBalance,
     ExchangeCoinBalance,
 )
+from app.schemas.exchange_position import (
+    ExchangePosition,
+    ExchangePositionList,
+)
 
 
 class BybitClient(BaseExchangeClient):
@@ -168,8 +172,138 @@ class BybitClient(BaseExchangeClient):
 
         return balance.model_dump()
 
-    async def get_positions(self):
-        raise NotImplementedError
+    async def get_positions(
+        self,
+        category: str = "linear",
+        settle_coin: str = "USDT",
+    ) -> dict:
+        normalized_category = category.lower()
+        normalized_settle_coin = settle_coin.upper()
+
+        if normalized_category not in {
+            "linear",
+            "inverse",
+            "option",
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported Bybit position category",
+            )
+
+        params = {
+            "category": normalized_category,
+        }
+
+        if normalized_category == "linear":
+            params["settleCoin"] = normalized_settle_coin
+
+        payload = await self._private_get(
+            endpoint="/v5/position/list",
+            params=params,
+        )
+
+        result = payload.get("result", {})
+        raw_positions = result.get("list", [])
+
+        positions = []
+
+        for position_data in raw_positions:
+            size = to_float(position_data.get("size"))
+
+            # Bybit may return an empty position when a symbol is queried.
+            # Only active positions should appear in the normalized result.
+            if size <= 0:
+                continue
+
+            raw_side = position_data.get("side", "")
+
+            if raw_side == "Buy":
+                normalized_side = "LONG"
+            elif raw_side == "Sell":
+                normalized_side = "SHORT"
+            else:
+                normalized_side = "UNKNOWN"
+
+            position = ExchangePosition(
+                exchange="BYBIT",
+                category=normalized_category,
+                symbol=position_data.get("symbol", ""),
+                side=normalized_side,
+                size=size,
+                position_value=to_float(
+                    position_data.get("positionValue")
+                ),
+                entry_price=to_float(
+                    position_data.get("avgPrice")
+                ),
+                break_even_price=to_float(
+                    position_data.get("breakEvenPrice")
+                ),
+                mark_price=to_float(
+                    position_data.get("markPrice")
+                ),
+                liquidation_price=to_float(
+                    position_data.get("liqPrice")
+                ),
+                leverage=to_float(
+                    position_data.get("leverage")
+                ),
+                unrealized_pnl=to_float(
+                    position_data.get("unrealisedPnl")
+                ),
+                realized_pnl=to_float(
+                    position_data.get("curRealisedPnl")
+                ),
+                cumulative_realized_pnl=to_float(
+                    position_data.get("cumRealisedPnl")
+                ),
+                take_profit=to_float(
+                    position_data.get("takeProfit")
+                ),
+                stop_loss=to_float(
+                    position_data.get("stopLoss")
+                ),
+                trailing_stop=to_float(
+                    position_data.get("trailingStop")
+                ),
+                initial_margin=to_float(
+                    position_data.get("positionIM")
+                ),
+                maintenance_margin=to_float(
+                    position_data.get("positionMM")
+                ),
+                position_status=position_data.get(
+                    "positionStatus",
+                    "",
+                ),
+                position_index=int(
+                    position_data.get("positionIdx") or 0
+                ),
+                auto_add_margin=(
+                    position_data.get("autoAddMargin") == 1
+                ),
+                reduce_only=bool(
+                    position_data.get("isReduceOnly", False)
+                ),
+                created_at_ms=int(
+                    position_data.get("createdTime") or 0
+                ),
+                updated_at_ms=int(
+                    position_data.get("updatedTime") or 0
+                ),
+            )
+
+            positions.append(position)
+
+        response = ExchangePositionList(
+            exchange="BYBIT",
+            category=normalized_category,
+            settle_coin=normalized_settle_coin,
+            count=len(positions),
+            positions=positions,
+        )
+
+        return response.model_dump()
 
     async def get_open_orders(self):
         raise NotImplementedError

@@ -51,3 +51,29 @@ async def get_exchange_balance(
         message="Exchange balance retrieved successfully",
         data=result,
     )
+
+
+@router.get("/{account_id}/positions")
+async def get_exchange_positions(
+    account_id: int,
+    category: str = "linear",
+    settle_coin: str = "USDT",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+
+    client = ExchangeFactory.create_client(account)
+
+    result = await client.get_positions(
+        category=category,
+        settle_coin=settle_coin,
+    )
+
+    return success_response(
+        message="Exchange positions retrieved successfully",
+        data=result,
+    )
