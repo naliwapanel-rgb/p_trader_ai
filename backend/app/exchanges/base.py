@@ -26,8 +26,13 @@ class BaseExchangeClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_open_orders(self):
-        """Return open orders."""
+    async def get_open_orders(
+        self,
+        category: str = "linear",
+        settle_coin: str = "USDT",
+        symbol: str | None = None,
+    ):
+        """Return normalized active orders."""
         raise NotImplementedError
 
     @abstractmethod

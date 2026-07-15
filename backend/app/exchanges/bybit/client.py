@@ -14,7 +14,10 @@ from app.schemas.exchange_position import (
     ExchangePosition,
     ExchangePositionList,
 )
-
+from app.schemas.exchange_order import (
+    ExchangeOrder,
+    ExchangeOrderList,
+)
 
 class BybitClient(BaseExchangeClient):
     def __init__(
@@ -305,8 +308,165 @@ class BybitClient(BaseExchangeClient):
 
         return response.model_dump()
 
-    async def get_open_orders(self):
-        raise NotImplementedError
+    async def get_open_orders(
+        self,
+        category: str = "linear",
+        settle_coin: str = "USDT",
+        symbol: str | None = None,
+    ) -> dict:
+        normalized_category = category.lower()
+        normalized_settle_coin = settle_coin.upper()
+
+        supported_categories = {
+            "spot",
+            "linear",
+            "inverse",
+            "option",
+        }
+
+        if normalized_category not in supported_categories:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported Bybit order category",
+            )
+
+        params = {
+            "category": normalized_category,
+            "openOnly": "0",
+            "limit": "50",
+        }
+
+        if symbol:
+            params["symbol"] = symbol.upper()
+        elif normalized_category == "linear":
+            params["settleCoin"] = normalized_settle_coin
+
+        payload = await self._private_get(
+            endpoint="/v5/order/realtime",
+            params=params,
+        )
+
+        result = payload.get("result", {})
+        raw_orders = result.get("list", [])
+
+        orders = []
+
+        for order_data in raw_orders:
+            raw_side = order_data.get("side", "")
+
+            if raw_side == "Buy":
+                normalized_side = "BUY"
+            elif raw_side == "Sell":
+                normalized_side = "SELL"
+            else:
+                normalized_side = "UNKNOWN"
+
+            order = ExchangeOrder(
+                exchange="BYBIT",
+                category=normalized_category,
+                order_id=order_data.get("orderId", ""),
+                client_order_id=order_data.get(
+                    "orderLinkId",
+                    "",
+                ),
+                symbol=order_data.get("symbol", ""),
+                side=normalized_side,
+                order_type=order_data.get(
+                    "orderType",
+                    "",
+                ).upper(),
+                status=order_data.get(
+                    "orderStatus",
+                    "",
+                ).upper(),
+                price=to_float(
+                    order_data.get("price")
+                ),
+                average_price=to_float(
+                    order_data.get("avgPrice")
+                ),
+                quantity=to_float(
+                    order_data.get("qty")
+                ),
+                filled_quantity=to_float(
+                    order_data.get("cumExecQty")
+                ),
+                remaining_quantity=to_float(
+                    order_data.get("leavesQty")
+                ),
+                order_value=to_float(
+                    order_data.get("leavesValue")
+                ),
+                cumulative_execution_value=to_float(
+                    order_data.get("cumExecValue")
+                ),
+                cumulative_execution_fee=to_float(
+                    order_data.get("cumExecFee")
+                ),
+                time_in_force=order_data.get(
+                    "timeInForce",
+                    "",
+                ),
+                position_index=int(
+                    order_data.get("positionIdx") or 0
+                ),
+                reduce_only=bool(
+                    order_data.get("reduceOnly", False)
+                ),
+                close_on_trigger=bool(
+                    order_data.get("closeOnTrigger", False)
+                ),
+                trigger_price=to_float(
+                    order_data.get("triggerPrice")
+                ),
+                trigger_direction=int(
+                    order_data.get("triggerDirection") or 0
+                ),
+                trigger_by=order_data.get(
+                    "triggerBy",
+                    "",
+                ),
+                take_profit=to_float(
+                    order_data.get("takeProfit")
+                ),
+                stop_loss=to_float(
+                    order_data.get("stopLoss")
+                ),
+                order_filter=order_data.get(
+                    "orderFilter",
+                    "",
+                ),
+                reject_reason=order_data.get(
+                    "rejectReason",
+                    "",
+                ),
+                cancel_type=order_data.get(
+                    "cancelType",
+                    "",
+                ),
+                created_at_ms=int(
+                    order_data.get("createdTime") or 0
+                ),
+                updated_at_ms=int(
+                    order_data.get("updatedTime") or 0
+                ),
+            )
+
+            orders.append(order)
+
+        response = ExchangeOrderList(
+            exchange="BYBIT",
+            category=normalized_category,
+            settle_coin=normalized_settle_coin,
+            count=len(orders),
+            next_cursor=result.get(
+                "nextPageCursor",
+                "",
+            ),
+            orders=orders,
+        )
+
+        return response.model_dump()
 
     async def get_ticker(self, symbol: str):
         try:

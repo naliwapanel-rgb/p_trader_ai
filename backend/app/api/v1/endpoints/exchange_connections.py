@@ -77,3 +77,31 @@ async def get_exchange_positions(
         message="Exchange positions retrieved successfully",
         data=result,
     )
+
+
+@router.get("/{account_id}/orders/open")
+async def get_exchange_open_orders(
+    account_id: int,
+    category: str = "linear",
+    settle_coin: str = "USDT",
+    symbol: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+
+    client = ExchangeFactory.create_client(account)
+
+    result = await client.get_open_orders(
+        category=category,
+        settle_coin=settle_coin,
+        symbol=symbol,
+    )
+
+    return success_response(
+        message="Exchange open orders retrieved successfully",
+        data=result,
+    )

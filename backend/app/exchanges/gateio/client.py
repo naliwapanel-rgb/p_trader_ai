@@ -25,7 +25,12 @@ class GateIOClient(BaseExchangeClient):
 ):
      raise NotImplementedError
 
-    async def get_open_orders(self):
+    async def get_open_orders(
+        self,
+        category: str = "linear",
+        settle_coin: str = "USDT",
+        symbol: str | None = None,
+    ):
         raise NotImplementedError
 
     async def get_ticker(self, symbol: str):

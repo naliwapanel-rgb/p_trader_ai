@@ -18,14 +18,15 @@ class MEXCClient(BaseExchangeClient):
     async def get_account_balance(self):
         raise NotImplementedError
 
-    async def get_positions(
-    self,
-    category: str = "linear",
-    settle_coin: str = "USDT",
-):
-     raise NotImplementedError
+    async def get_positions(self):
+        raise NotImplementedError
 
-    async def get_open_orders(self):
+    async def get_open_orders(
+        self,
+        category: str = "linear",
+        settle_coin: str = "USDT",
+        symbol: str | None = None,
+    ):
         raise NotImplementedError
 
     async def get_ticker(self, symbol: str):
