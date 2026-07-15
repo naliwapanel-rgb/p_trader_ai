@@ -20,25 +20,33 @@ class BybitAuth:
     def sign(
         self,
         timestamp: str,
-        query: str = "",
+        payload: str = "",
     ) -> str:
-        payload = timestamp + self.api_key + str(self.recv_window) + query
+        signing_payload = (
+            timestamp
+            + self.api_key
+            + str(self.recv_window)
+            + payload
+        )
 
         return hmac.new(
-            self.api_secret.encode(),
-            payload.encode(),
+            self.api_secret.encode("utf-8"),
+            signing_payload.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
 
     def headers(
         self,
-        query: str = "",
+        payload: str = "",
     ) -> dict[str, str]:
-        ts = self.timestamp()
+        timestamp = self.timestamp()
 
         return {
             "X-BAPI-API-KEY": self.api_key,
-            "X-BAPI-TIMESTAMP": ts,
+            "X-BAPI-TIMESTAMP": timestamp,
             "X-BAPI-RECV-WINDOW": str(self.recv_window),
-            "X-BAPI-SIGN": self.sign(ts, query),
+            "X-BAPI-SIGN": self.sign(
+                timestamp=timestamp,
+                payload=payload,
+            ),
         }

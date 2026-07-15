@@ -1,8 +1,10 @@
+import json
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException, status
 
+from app.schemas.exchange_trade import ExchangeOrderPlacement
 from app.exchanges.base import BaseExchangeClient
 from app.exchanges.bybit.auth import BybitAuth
 from app.exchanges.utils import to_float
@@ -41,24 +43,28 @@ class BybitClient(BaseExchangeClient):
             api_secret=api_secret,
         )
 
-    async def _private_get(
+    async def _private_post(
         self,
         endpoint: str,
-        params: dict[str, str] | None = None,
+        body: dict,
     ) -> dict:
-        request_params = params or {}
-        query_string = urlencode(request_params)
+        body_string = json.dumps(
+            body,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
 
         url = f"{self.base_url}{endpoint}"
 
-        if query_string:
-            url = f"{url}?{query_string}"
+        headers = self.auth.headers(body_string)
+        headers["Content-Type"] = "application/json"
 
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                response = await client.get(
+                response = await client.post(
                     url,
-                    headers=self.auth.headers(query_string),
+                    headers=headers,
+                    content=body_string,
                 )
         except httpx.TimeoutException as exc:
             raise HTTPException(
@@ -536,6 +542,7 @@ class BybitClient(BaseExchangeClient):
             "volume_24h": float(ticker.get("volume24h") or 0),
         }
 
+
     async def get_orderbook(self, symbol: str):
         raise NotImplementedError
 
@@ -544,8 +551,67 @@ class BybitClient(BaseExchangeClient):
         symbol: str,
         side: str,
         quantity: float,
-    ):
-        raise NotImplementedError
+        category: str = "linear",
+        time_in_force: str = "IOC",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_side = side.upper()
+        bybit_side = "Buy" if normalized_side == "BUY" else "Sell"
+
+        body = {
+            "category": category.lower(),
+            "symbol": normalized_symbol,
+            "side": bybit_side,
+            "orderType": "Market",
+            "qty": str(quantity),
+            "timeInForce": time_in_force,
+            "reduceOnly": reduce_only,
+            "closeOnTrigger": close_on_trigger,
+        }
+
+        if client_order_id:
+            body["orderLinkId"] = client_order_id
+
+        if dry_run:
+            return ExchangeOrderPlacement(
+                exchange="BYBIT",
+                category=category.lower(),
+                symbol=normalized_symbol,
+                side=normalized_side,
+                order_type="MARKET",
+                quantity=quantity,
+                price=0.0,
+                dry_run=True,
+                accepted=False,
+                client_order_id=client_order_id or "",
+                message="Dry run completed. No order was sent to Bybit.",
+            ).model_dump()
+
+        payload = await self._private_post(
+            endpoint="/v5/order/create",
+            body=body,
+        )
+
+        result = payload.get("result", {})
+
+        return ExchangeOrderPlacement(
+            exchange="BYBIT",
+            category=category.lower(),
+            order_id=result.get("orderId", ""),
+            client_order_id=result.get("orderLinkId", ""),
+            symbol=normalized_symbol,
+            side=normalized_side,
+            order_type="MARKET",
+            quantity=quantity,
+            price=0.0,
+            dry_run=False,
+            accepted=True,
+            message="Order request accepted by Bybit.",
+        ).model_dump()
 
     async def place_limit_order(
         self,
@@ -553,8 +619,68 @@ class BybitClient(BaseExchangeClient):
         side: str,
         quantity: float,
         price: float,
-    ):
-        raise NotImplementedError
+        category: str = "linear",
+        time_in_force: str = "GTC",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_side = side.upper()
+        bybit_side = "Buy" if normalized_side == "BUY" else "Sell"
+
+        body = {
+            "category": category.lower(),
+            "symbol": normalized_symbol,
+            "side": bybit_side,
+            "orderType": "Limit",
+            "qty": str(quantity),
+            "price": str(price),
+            "timeInForce": time_in_force,
+            "reduceOnly": reduce_only,
+            "closeOnTrigger": close_on_trigger,
+        }
+
+        if client_order_id:
+            body["orderLinkId"] = client_order_id
+
+        if dry_run:
+            return ExchangeOrderPlacement(
+                exchange="BYBIT",
+                category=category.lower(),
+                symbol=normalized_symbol,
+                side=normalized_side,
+                order_type="LIMIT",
+                quantity=quantity,
+                price=price,
+                dry_run=True,
+                accepted=False,
+                client_order_id=client_order_id or "",
+                message="Dry run completed. No order was sent to Bybit.",
+            ).model_dump()
+
+        payload = await self._private_post(
+            endpoint="/v5/order/create",
+            body=body,
+        )
+
+        result = payload.get("result", {})
+
+        return ExchangeOrderPlacement(
+            exchange="BYBIT",
+            category=category.lower(),
+            order_id=result.get("orderId", ""),
+            client_order_id=result.get("orderLinkId", ""),
+            symbol=normalized_symbol,
+            side=normalized_side,
+            order_type="LIMIT",
+            quantity=quantity,
+            price=price,
+            dry_run=False,
+            accepted=True,
+            message="Order request accepted by Bybit.",
+        ).model_dump()
 
     async def cancel_order(
         self,

@@ -39,10 +39,35 @@ class BinanceClient(BaseExchangeClient):
     async def get_orderbook(self, symbol: str):
         raise NotImplementedError
 
-    async def place_market_order(self, symbol: str, side: str, quantity: float):
+    async def place_market_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        category: str = "linear",
+        time_in_force: str = "IOC",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ):
+        """Create or simulate a market order."""
         raise NotImplementedError
 
-    async def place_limit_order(self, symbol: str, side: str, quantity: float, price: float):
+    async def place_limit_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        price: float,
+        category: str = "linear",
+        time_in_force: str = "GTC",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ):
+        """Create or simulate a limit order."""
         raise NotImplementedError
 
     async def cancel_order(self, symbol: str, order_id: str):

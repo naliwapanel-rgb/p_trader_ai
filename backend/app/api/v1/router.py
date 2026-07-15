@@ -12,6 +12,13 @@ from app.api.v1.endpoints import (
     watchlists,
 )
 
+from app.api.v1.endpoints import (
+    auth,
+    exchange_accounts,
+    exchange_connections,
+    exchange_trading,
+)
+
 api_router = APIRouter()
 
 api_router.include_router(health.router)
@@ -23,3 +30,4 @@ api_router.include_router(alerts.router)
 api_router.include_router(notification_preferences.router)
 api_router.include_router(exchange_accounts.router)
 api_router.include_router(exchange_connections.router)
+api_router.include_router(exchange_trading.router)

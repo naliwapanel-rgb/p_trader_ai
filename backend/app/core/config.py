@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
 
+    
+    exchange_trading_enabled: bool = False
+    exchange_dry_run: bool = True
+    max_order_quantity: float = 1.0
+    max_order_value_usd: float = 25.0
+
     database_url: str = "sqlite:///./p_trader_ai.db"
 
     secret_key: str = "CHANGE_ME_IN_PRODUCTION"

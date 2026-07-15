@@ -51,8 +51,14 @@ class BaseExchangeClient(ABC):
         symbol: str,
         side: str,
         quantity: float,
+        category: str = "linear",
+        time_in_force: str = "IOC",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
     ):
-        """Execute market order."""
+        """Create or simulate a market order."""
         raise NotImplementedError
 
     @abstractmethod
@@ -62,10 +68,16 @@ class BaseExchangeClient(ABC):
         side: str,
         quantity: float,
         price: float,
+        category: str = "linear",
+        time_in_force: str = "GTC",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
     ):
-        """Execute limit order."""
+        """Create or simulate a limit order."""
         raise NotImplementedError
-
+    
     @abstractmethod
     async def cancel_order(
         self,
