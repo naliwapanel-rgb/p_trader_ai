@@ -12,6 +12,10 @@ from app.schemas.exchange_balance import (
     ExchangeBalance,
     ExchangeCoinBalance,
 )
+from app.schemas.exchange_trade import (
+    ExchangeOrderActionResult,
+    ExchangeOrderPlacement,
+)
 from app.schemas.exchange_position import (
     ExchangePosition,
     ExchangePositionList,
@@ -954,6 +958,218 @@ class BybitClient(BaseExchangeClient):
     async def cancel_order(
         self,
         symbol: str,
-        order_id: str,
-    ):
-        raise NotImplementedError
+        order_id: str | None = None,
+        client_order_id: str | None = None,
+        category: str = "linear",
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_category = category.lower()
+
+        if not order_id and not client_order_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Either order_id or client_order_id "
+                    "is required"
+                ),
+            )
+
+        body = {
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+        }
+
+        if order_id:
+            body["orderId"] = order_id
+
+        if client_order_id:
+            body["orderLinkId"] = client_order_id
+
+        if dry_run:
+            return ExchangeOrderActionResult(
+                exchange="BYBIT",
+                category=normalized_category,
+                symbol=normalized_symbol,
+                action="CANCEL",
+                order_id=order_id or "",
+                client_order_id=client_order_id or "",
+                dry_run=True,
+                accepted=False,
+                message=(
+                    "Dry run completed. No cancellation "
+                    "was sent to Bybit."
+                ),
+            ).model_dump()
+
+        payload = await self._private_post(
+            endpoint="/v5/order/cancel",
+            body=body,
+        )
+
+        result = payload.get("result", {})
+
+        return ExchangeOrderActionResult(
+            exchange="BYBIT",
+            category=normalized_category,
+            symbol=normalized_symbol,
+            action="CANCEL",
+            order_id=result.get(
+                "orderId",
+                order_id or "",
+            ),
+            client_order_id=result.get(
+                "orderLinkId",
+                client_order_id or "",
+            ),
+            dry_run=False,
+            accepted=True,
+            message="Cancellation request accepted by Bybit.",
+        ).model_dump()
+    
+    async def amend_order(
+        self,
+        symbol: str,
+        order_id: str | None = None,
+        client_order_id: str | None = None,
+        quantity: float | None = None,
+        price: float | None = None,
+        trigger_price: float | None = None,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        category: str = "linear",
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_category = category.lower()
+
+        if not order_id and not client_order_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Either order_id or client_order_id "
+                    "is required"
+                ),
+            )
+
+        amendment_values = (
+            quantity,
+            price,
+            trigger_price,
+            take_profit,
+            stop_loss,
+        )
+
+        if all(value is None for value in amendment_values):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one amendment value is required",
+            )
+
+        rules_data = await self.get_instrument_rules(
+            symbol=normalized_symbol,
+            category=normalized_category,
+        )
+
+        rules = ExchangeInstrumentRules.model_validate(
+            rules_data
+        )
+
+        body = {
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+        }
+
+        if order_id:
+            body["orderId"] = order_id
+
+        if client_order_id:
+            body["orderLinkId"] = client_order_id
+
+        if quantity is not None:
+            quantity_decimal = to_decimal(quantity)
+
+            self._validate_quantity_against_rules(
+                quantity=quantity_decimal,
+                rules=rules,
+                order_type="LIMIT",
+            )
+
+            body["qty"] = decimal_to_plain_string(
+                quantity_decimal
+            )
+
+        if price is not None:
+            price_decimal = to_decimal(price)
+
+            self._validate_limit_price_against_rules(
+                price=price_decimal,
+                rules=rules,
+            )
+
+            body["price"] = decimal_to_plain_string(
+                price_decimal
+            )
+
+        if quantity is not None and price is not None:
+            self._validate_minimum_notional(
+                quantity=quantity_decimal,
+                price=price_decimal,
+                rules=rules,
+            )
+
+        if trigger_price is not None:
+            body["triggerPrice"] = decimal_to_plain_string(
+                to_decimal(trigger_price)
+            )
+
+        if take_profit is not None:
+            body["takeProfit"] = decimal_to_plain_string(
+                to_decimal(take_profit)
+            )
+
+        if stop_loss is not None:
+            body["stopLoss"] = decimal_to_plain_string(
+                to_decimal(stop_loss)
+            )
+
+        if dry_run:
+            return ExchangeOrderActionResult(
+                exchange="BYBIT",
+                category=normalized_category,
+                symbol=normalized_symbol,
+                action="AMEND",
+                order_id=order_id or "",
+                client_order_id=client_order_id or "",
+                dry_run=True,
+                accepted=False,
+                message=(
+                    "Dry run completed. No amendment "
+                    "was sent to Bybit."
+                ),
+            ).model_dump()
+
+        payload = await self._private_post(
+            endpoint="/v5/order/amend",
+            body=body,
+        )
+
+        result = payload.get("result", {})
+
+        return ExchangeOrderActionResult(
+            exchange="BYBIT",
+            category=normalized_category,
+            symbol=normalized_symbol,
+            action="AMEND",
+            order_id=result.get(
+                "orderId",
+                order_id or "",
+            ),
+            client_order_id=result.get(
+                "orderLinkId",
+                client_order_id or "",
+            ),
+            dry_run=False,
+            accepted=True,
+            message="Amendment request accepted by Bybit.",
+        ).model_dump()

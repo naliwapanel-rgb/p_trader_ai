@@ -8,6 +8,12 @@ from app.schemas.exchange_trade import (
     LimitOrderRequest,
     MarketOrderRequest,
 )
+from app.schemas.exchange_trade import (
+    AmendOrderRequest,
+    CancelOrderRequest,
+    LimitOrderRequest,
+    MarketOrderRequest,
+)
 from app.services.exchange_trading_service import ExchangeTradingService
 from app.utils.responses import success_response
 
@@ -52,5 +58,41 @@ async def place_limit_order(
 
     return success_response(
         message="Limit order processed successfully",
+        data=result,
+    )
+@router.post("/{account_id}/orders/cancel")
+async def cancel_order(
+    account_id: int,
+    data: CancelOrderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    result = await ExchangeTradingService(db).cancel_order(
+        current_user=current_user,
+        account_id=account_id,
+        data=data,
+    )
+
+    return success_response(
+        message="Order cancellation processed successfully",
+        data=result,
+    )
+
+
+@router.post("/{account_id}/orders/amend")
+async def amend_order(
+    account_id: int,
+    data: AmendOrderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    result = await ExchangeTradingService(db).amend_order(
+        current_user=current_user,
+        account_id=account_id,
+        data=data,
+    )
+
+    return success_response(
+        message="Order amendment processed successfully",
         data=result,
     )

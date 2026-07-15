@@ -70,5 +70,27 @@ class GateIOClient(BaseExchangeClient):
         """Create or simulate a limit order."""
         raise NotImplementedError
 
-    async def cancel_order(self, symbol: str, order_id: str):
+    async def cancel_order(
+        self,
+        symbol: str,
+        order_id: str | None = None,
+        client_order_id: str | None = None,
+        category: str = "linear",
+        dry_run: bool = True,
+    ):
+        raise NotImplementedError
+    
+    async def amend_order(
+        self,
+        symbol: str,
+        order_id: str | None = None,
+        client_order_id: str | None = None,
+        quantity: float | None = None,
+        price: float | None = None,
+        trigger_price: float | None = None,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        category: str = "linear",
+        dry_run: bool = True,
+    ):
         raise NotImplementedError

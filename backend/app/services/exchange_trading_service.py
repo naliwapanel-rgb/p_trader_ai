@@ -8,6 +8,12 @@ from app.schemas.exchange_trade import (
     LimitOrderRequest,
     MarketOrderRequest,
 )
+from app.schemas.exchange_trade import (
+    AmendOrderRequest,
+    CancelOrderRequest,
+    LimitOrderRequest,
+    MarketOrderRequest,
+)
 from app.services.exchange_account_service import ExchangeAccountService
 
 
@@ -44,7 +50,57 @@ class ExchangeTradingService:
                     f"of {self.settings.max_order_quantity}"
                 ),
             )
+    async def cancel_order(
+        self,
+        current_user: User,
+        account_id: int,
+        data: CancelOrderRequest,
+    ) -> dict:
+        client = self._get_client(
+            current_user=current_user,
+            account_id=account_id,
+        )
 
+        return await client.cancel_order(
+            symbol=data.symbol,
+            order_id=data.order_id,
+            client_order_id=data.client_order_id,
+            category=data.category,
+            dry_run=(
+                self.settings.exchange_dry_run
+                or not self.settings.exchange_trading_enabled
+            ),
+        )
+
+    async def amend_order(
+        self,
+        current_user: User,
+        account_id: int,
+        data: AmendOrderRequest,
+    ) -> dict:
+        if data.quantity is not None:
+            self._validate_quantity(data.quantity)
+
+        client = self._get_client(
+            current_user=current_user,
+            account_id=account_id,
+        )
+
+        return await client.amend_order(
+            symbol=data.symbol,
+            order_id=data.order_id,
+            client_order_id=data.client_order_id,
+            quantity=data.quantity,
+            price=data.price,
+            trigger_price=data.trigger_price,
+            take_profit=data.take_profit,
+            stop_loss=data.stop_loss,
+            category=data.category,
+            dry_run=(
+                self.settings.exchange_dry_run
+                or not self.settings.exchange_trading_enabled
+            ),
+        )
     async def place_market_order(
         self,
         current_user: User,
