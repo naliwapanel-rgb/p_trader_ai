@@ -57,6 +57,10 @@ class BaseExchangeClient(ABC):
         close_on_trigger: bool = False,
         client_order_id: str | None = None,
         dry_run: bool = True,
+        tp_order_type: str = "Market",
+        sl_order_type: str = "Market",
+        tp_limit_price: float | None = None,
+        sl_limit_price: float | None = None,
     ):
         """Create or simulate a market order."""
         raise NotImplementedError
@@ -79,6 +83,10 @@ class BaseExchangeClient(ABC):
         tpsl_mode: str = "Full",
         client_order_id: str | None = None,
         dry_run: bool = True,
+        tp_order_type: str = "Market",
+        sl_order_type: str = "Market",
+        tp_limit_price: float | None = None,
+        sl_limit_price: float | None = None,
     ):
         """Create or simulate a limit order."""
         raise NotImplementedError

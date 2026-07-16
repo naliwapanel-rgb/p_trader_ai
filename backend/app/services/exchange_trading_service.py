@@ -125,6 +125,10 @@ class ExchangeTradingService:
             stop_loss=data.stop_loss,
             tp_trigger_by=data.tp_trigger_by,
             sl_trigger_by=data.sl_trigger_by,
+            tp_order_type=data.tp_order_type,
+            sl_order_type=data.sl_order_type,
+            tp_limit_price=data.tp_limit_price,
+            sl_limit_price=data.sl_limit_price,
             tpsl_mode=data.tpsl_mode,
             client_order_id=data.client_order_id,
             dry_run=(
@@ -138,6 +142,7 @@ class ExchangeTradingService:
         current_user: User,
         account_id: int,
         data: LimitOrderRequest,
+        
     ) -> dict:
         self._validate_quantity(data.quantity)
 
@@ -166,6 +171,10 @@ class ExchangeTradingService:
             time_in_force=data.time_in_force,
             reduce_only=data.reduce_only,
             close_on_trigger=data.close_on_trigger,
+            tp_order_type=data.tp_order_type,
+            sl_order_type=data.sl_order_type,
+            tp_limit_price=data.tp_limit_price,
+            sl_limit_price=data.sl_limit_price,
             client_order_id=data.client_order_id,
             dry_run=(
                 self.settings.exchange_dry_run

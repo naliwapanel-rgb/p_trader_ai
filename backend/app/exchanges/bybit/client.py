@@ -978,6 +978,10 @@ class BybitClient(BaseExchangeClient):
         tp_trigger_by: str,
         sl_trigger_by: str,
         tpsl_mode: str,
+        tp_order_type: str = "Market",
+        sl_order_type: str = "Market",
+        tp_limit_price: float | None = None,
+        sl_limit_price: float | None = None,
     ) -> None:
         supported_trigger_types = {
             "LastPrice",
@@ -985,19 +989,23 @@ class BybitClient(BaseExchangeClient):
             "IndexPrice",
         }
 
-        if (
-            take_profit is not None
-            and take_profit <= 0
-        ):
+        supported_modes = {
+            "Full",
+            "Partial",
+        }
+
+        supported_order_types = {
+            "Market",
+            "Limit",
+        }
+
+        if take_profit is not None and take_profit <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Take-profit price must be greater than zero",
             )
 
-        if (
-            stop_loss is not None
-            and stop_loss <= 0
-        ):
+        if stop_loss is not None and stop_loss <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Stop-loss price must be greater than zero",
@@ -1015,12 +1023,102 @@ class BybitClient(BaseExchangeClient):
                 detail="Unsupported stop-loss trigger type",
             )
 
-        if tpsl_mode != "Full":
+        if tpsl_mode not in supported_modes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported TP/SL mode",
+            )
+
+        if tp_order_type not in supported_order_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported take-profit order type",
+            )
+
+        if sl_order_type not in supported_order_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported stop-loss order type",
+            )
+
+        if tpsl_mode == "Full":
+            if (
+                tp_order_type != "Market"
+                or sl_order_type != "Market"
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Full TP/SL mode supports only "
+                        "market TP/SL orders"
+                    ),
+                )
+
+            if (
+                tp_limit_price is not None
+                or sl_limit_price is not None
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Limit TP/SL prices are not allowed "
+                        "in Full mode"
+                    ),
+                )
+
+        if tp_order_type == "Limit":
+            if take_profit is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "take_profit is required for "
+                        "a limit take-profit order"
+                    ),
+                )
+
+            if tp_limit_price is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "tp_limit_price is required when "
+                        "tp_order_type is Limit"
+                    ),
+                )
+
+        elif tp_limit_price is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Phase 6.7B Step 3A supports only "
-                    "full-position TP/SL"
+                    "tp_limit_price requires "
+                    "tp_order_type=Limit"
+                ),
+            )
+
+        if sl_order_type == "Limit":
+            if stop_loss is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "stop_loss is required for "
+                        "a limit stop-loss order"
+                    ),
+                )
+
+            if sl_limit_price is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "sl_limit_price is required when "
+                        "sl_order_type is Limit"
+                    ),
+                )
+
+        elif sl_limit_price is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "sl_limit_price requires "
+                    "sl_order_type=Limit"
                 ),
             )
     async def place_market_order(
@@ -1037,49 +1135,38 @@ class BybitClient(BaseExchangeClient):
         tp_trigger_by: str = "LastPrice",
         sl_trigger_by: str = "LastPrice",
         tpsl_mode: str = "Full",
+        tp_order_type: str = "Market",
+        sl_order_type: str = "Market",
+        tp_limit_price: float | None = None,
+        sl_limit_price: float | None = None,
         client_order_id: str | None = None,
         dry_run: bool = True,
     ) -> dict:
         normalized_symbol = symbol.upper()
         normalized_side = side.upper()
-        bybit_side = "Buy" if normalized_side == "BUY" else "Sell"
-        rules_data = await self.get_instrument_rules(
-            symbol=normalized_symbol,
-            category=category,
-        )
-       
-        rules = ExchangeInstrumentRules.model_validate(
-            rules_data
+        normalized_category = category.lower()
+
+        bybit_side = (
+            "Buy"
+            if normalized_side == "BUY"
+            else "Sell"
         )
 
-        quantity_decimal = to_decimal(quantity)
-
-        self._validate_quantity_against_rules(
-            quantity=quantity_decimal,
-            rules=rules,
-            order_type="MARKET",
-        )
-        body = {
-            "category": category.lower(),
-            "symbol": normalized_symbol,
-            "side": bybit_side,
-            "orderType": "Market",
-            "qty": decimal_to_plain_string(quantity_decimal),
-            "timeInForce": time_in_force,
-            "reduceOnly": reduce_only,
-            "closeOnTrigger": close_on_trigger,
-        }
         self._validate_attached_tpsl(
             take_profit=take_profit,
             stop_loss=stop_loss,
             tp_trigger_by=tp_trigger_by,
             sl_trigger_by=sl_trigger_by,
             tpsl_mode=tpsl_mode,
+            tp_order_type=tp_order_type,
+            sl_order_type=sl_order_type,
+            tp_limit_price=tp_limit_price,
+            sl_limit_price=sl_limit_price,
         )
 
         rules_data = await self.get_instrument_rules(
             symbol=normalized_symbol,
-            category=category,
+            category=normalized_category,
         )
 
         rules = ExchangeInstrumentRules.model_validate(
@@ -1095,7 +1182,7 @@ class BybitClient(BaseExchangeClient):
         )
 
         body = {
-            "category": category.lower(),
+            "category": normalized_category,
             "symbol": normalized_symbol,
             "side": bybit_side,
             "orderType": "Market",
@@ -1115,24 +1202,37 @@ class BybitClient(BaseExchangeClient):
                 to_decimal(take_profit)
             )
             body["tpTriggerBy"] = tp_trigger_by
+            body["tpOrderType"] = tp_order_type
 
         if stop_loss is not None:
             body["stopLoss"] = decimal_to_plain_string(
                 to_decimal(stop_loss)
             )
             body["slTriggerBy"] = sl_trigger_by
+            body["slOrderType"] = sl_order_type
 
-        if take_profit is not None or stop_loss is not None:
+        if (
+            take_profit is not None
+            or stop_loss is not None
+        ):
             body["tpslMode"] = tpsl_mode
-            body["tpOrderType"] = "Market"
-            body["slOrderType"] = "Market"
-        if client_order_id:
-            body["orderLinkId"] = client_order_id
+
+        if tp_limit_price is not None:
+            body["tpLimitPrice"] = decimal_to_plain_string(
+                to_decimal(tp_limit_price)
+            )
+
+        if sl_limit_price is not None:
+            body["slLimitPrice"] = decimal_to_plain_string(
+                to_decimal(sl_limit_price)
+            )
 
         if dry_run:
             return ExchangeOrderPlacement(
                 exchange="BYBIT",
-                category=category.lower(),
+                category=normalized_category,
+                order_id="",
+                client_order_id=client_order_id or "",
                 symbol=normalized_symbol,
                 side=normalized_side,
                 order_type="MARKET",
@@ -1140,8 +1240,10 @@ class BybitClient(BaseExchangeClient):
                 price=0.0,
                 dry_run=True,
                 accepted=False,
-                client_order_id=client_order_id or "",
-                message="Dry run completed. No order was sent to Bybit.",
+                message=(
+                    "Dry run completed. "
+                    "No order was sent to Bybit."
+                ),
             ).model_dump()
 
         payload = await self._private_post(
@@ -1151,14 +1253,10 @@ class BybitClient(BaseExchangeClient):
 
         result = payload.get("result", {})
         order_id = result.get("orderId", "")
-        returned_client_order_id = result.get(
-            "orderLinkId",
-            client_order_id or "",
-        )
 
         verified_order = await self.get_order_by_id(
             order_id=order_id,
-            category=category,
+            category=normalized_category,
             symbol=normalized_symbol,
         )
 
@@ -1167,21 +1265,26 @@ class BybitClient(BaseExchangeClient):
 
         return ExchangeOrderExecution(
             exchange="BYBIT",
-            category=category.lower(),
+            category=normalized_category,
             order_id=order_id,
-            client_order_id=returned_client_order_id,
+            client_order_id=result.get(
+                "orderLinkId",
+                client_order_id or "",
+            ),
             symbol=normalized_symbol,
             side=normalized_side,
             order_type="MARKET",
             status="PENDING",
             quantity=quantity,
             price=0.0,
+            reduce_only=reduce_only,
+            close_on_trigger=close_on_trigger,
             dry_run=False,
             accepted=True,
             verified=False,
             message=(
-                "Order accepted by Bybit, but its status "
-                "is not available yet."
+                "Market order accepted by Bybit, "
+                "but its status is not available yet."
             ),
         ).model_dump()
     
@@ -1396,6 +1499,10 @@ class BybitClient(BaseExchangeClient):
         tpsl_mode: str = "Full",
         client_order_id: str | None = None,
         dry_run: bool = True,
+        tp_order_type: str = "Market",
+        sl_order_type: str = "Market",
+        tp_limit_price: float | None = None,
+        sl_limit_price: float | None = None,
     ) -> dict:
         normalized_symbol = symbol.upper()
         normalized_side = side.upper()
@@ -1450,17 +1557,27 @@ class BybitClient(BaseExchangeClient):
                 to_decimal(take_profit)
             )
             body["tpTriggerBy"] = tp_trigger_by
+            body["tpOrderType"] = tp_order_type
 
         if stop_loss is not None:
             body["stopLoss"] = decimal_to_plain_string(
                 to_decimal(stop_loss)
             )
             body["slTriggerBy"] = sl_trigger_by
+            body["slOrderType"] = sl_order_type
 
         if take_profit is not None or stop_loss is not None:
             body["tpslMode"] = tpsl_mode
-            body["tpOrderType"] = "Market"
-            body["slOrderType"] = "Market"
+
+        if tp_limit_price is not None:
+            body["tpLimitPrice"] = decimal_to_plain_string(
+                to_decimal(tp_limit_price)
+            )
+
+        if sl_limit_price is not None:
+            body["slLimitPrice"] = decimal_to_plain_string(
+                to_decimal(sl_limit_price)
+            )
         if client_order_id:
             body["orderLinkId"] = client_order_id
 

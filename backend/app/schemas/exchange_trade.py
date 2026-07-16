@@ -77,6 +77,19 @@ class MarketOrderRequest(BaseModel):
 
     tpsl_mode: TpSlMode = "Full"
 
+    tp_order_type: TpSlOrderType = "Market"
+    sl_order_type: TpSlOrderType = "Market"
+
+    tp_limit_price: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    sl_limit_price: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
     client_order_id: str | None = Field(
         default=None,
         min_length=1,
@@ -117,6 +130,18 @@ class LimitOrderRequest(BaseModel):
 
     tpsl_mode: TpSlMode = "Full"
 
+    tp_order_type: TpSlOrderType = "Market"
+    sl_order_type: TpSlOrderType = "Market"
+
+    tp_limit_price: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    sl_limit_price: float | None = Field(
+        default=None,
+        gt=0,
+    )
     client_order_id: str | None = Field(
         default=None,
         min_length=1,
