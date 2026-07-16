@@ -125,3 +125,9 @@ class BaseExchangeClient(ABC):
     ):
         """Create or simulate a conditional stop-market order."""
         raise NotImplementedError
+
+async def place_stop_limit_order(
+    self,
+    **kwargs,
+):
+    raise NotImplementedError

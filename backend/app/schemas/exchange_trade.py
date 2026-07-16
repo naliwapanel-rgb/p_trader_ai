@@ -4,9 +4,35 @@ from pydantic import BaseModel, Field, model_validator
 
 
 TradingSide = Literal["BUY", "SELL"]
-TradingCategory = Literal["spot", "linear", "inverse"]
-OrderCategory = Literal["spot", "linear", "inverse", "option"]
-TimeInForce = Literal["GTC", "IOC", "FOK", "PostOnly"]
+
+TradingCategory = Literal[
+    "spot",
+    "linear",
+    "inverse",
+]
+
+OrderCategory = Literal[
+    "spot",
+    "linear",
+    "inverse",
+    "option",
+]
+
+TimeInForce = Literal[
+    "GTC",
+    "IOC",
+    "FOK",
+    "PostOnly",
+]
+
+TriggerDirection = Literal[1, 2]
+
+TriggerPriceType = Literal[
+    "LastPrice",
+    "MarkPrice",
+    "IndexPrice",
+]
+
 NormalizedOrderStatus = Literal[
     "PENDING",
     "NEW",
@@ -17,7 +43,6 @@ NormalizedOrderStatus = Literal[
     "EXPIRED",
     "UNKNOWN",
 ]
-
 class MarketOrderRequest(BaseModel):
     symbol: str = Field(min_length=3, max_length=30)
     side: TradingSide
@@ -240,6 +265,43 @@ class StopMarketOrderRequest(BaseModel):
     trigger_by: TriggerPriceType = "LastPrice"
 
     category: TradingCategory = "linear"
+
+    reduce_only: bool = False
+    close_on_trigger: bool = False
+
+    position_index: int = Field(
+        default=0,
+        ge=0,
+        le=2,
+    )
+
+    client_order_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=36,
+    )
+
+    @model_validator(mode="after")
+    def normalize_values(self):
+        self.symbol = self.symbol.upper()
+        return self
+    
+class StopLimitOrderRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+
+    side: TradingSide
+    quantity: float = Field(gt=0)
+    price: float = Field(gt=0)
+
+    trigger_price: float = Field(gt=0)
+    trigger_direction: TriggerDirection
+    trigger_by: TriggerPriceType = "LastPrice"
+
+    category: TradingCategory = "linear"
+    time_in_force: TimeInForce = "GTC"
 
     reduce_only: bool = False
     close_on_trigger: bool = False

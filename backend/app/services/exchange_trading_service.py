@@ -9,6 +9,7 @@ from app.schemas.exchange_trade import (
     CancelOrderRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    StopLimitOrderRequest,
     StopMarketOrderRequest,
 )
 
@@ -160,6 +161,39 @@ class ExchangeTradingService:
             time_in_force=data.time_in_force,
             reduce_only=data.reduce_only,
             close_on_trigger=data.close_on_trigger,
+            client_order_id=data.client_order_id,
+            dry_run=(
+                self.settings.exchange_dry_run
+                or not self.settings.exchange_trading_enabled
+            ),
+        )
+    
+    async def place_stop_limit_order(
+        self,
+        current_user: User,
+        account_id: int,
+        data: StopLimitOrderRequest,
+    ) -> dict:
+        self._validate_quantity(data.quantity)
+
+        client = self._get_client(
+            current_user=current_user,
+            account_id=account_id,
+        )
+
+        return await client.place_stop_limit_order(
+            symbol=data.symbol,
+            side=data.side,
+            quantity=data.quantity,
+            price=data.price,
+            trigger_price=data.trigger_price,
+            trigger_direction=data.trigger_direction,
+            trigger_by=data.trigger_by,
+            category=data.category,
+            time_in_force=data.time_in_force,
+            reduce_only=data.reduce_only,
+            close_on_trigger=data.close_on_trigger,
+            position_index=data.position_index,
             client_order_id=data.client_order_id,
             dry_run=(
                 self.settings.exchange_dry_run

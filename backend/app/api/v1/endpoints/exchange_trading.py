@@ -9,6 +9,7 @@ from app.schemas.exchange_trade import (
     CancelOrderRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    StopLimitOrderRequest,
     StopMarketOrderRequest,
 )
 from app.services.exchange_trading_service import ExchangeTradingService
@@ -57,22 +58,43 @@ async def place_stop_market_order(
         message="Stop-market order processed successfully",
         data=result,
     )
-
-@router.post("/{account_id}/orders/limit")
-async def place_limit_order(
+@router.post("/{account_id}/orders/stop-limit")
+async def place_stop_limit_order(
     account_id: int,
-    data: LimitOrderRequest,
+    data: StopLimitOrderRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    result = await ExchangeTradingService(db).place_limit_order(
+    result = await ExchangeTradingService(
+        db
+    ).place_stop_limit_order(
         current_user=current_user,
         account_id=account_id,
         data=data,
     )
 
     return success_response(
-        message="Limit order processed successfully",
+        message="Stop-limit order processed successfully",
+        data=result,
+    )
+
+@router.post("/{account_id}/orders/stop-limit")
+async def place_stop_limit_order(
+    account_id: int,
+    data: StopLimitOrderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    result = await ExchangeTradingService(
+        db
+    ).place_stop_limit_order(
+        current_user=current_user,
+        account_id=account_id,
+        data=data,
+    )
+
+    return success_response(
+        message="Stop-limit order processed successfully",
         data=result,
     )
 @router.post("/{account_id}/orders/cancel")
