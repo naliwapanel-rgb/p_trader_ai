@@ -14,6 +14,11 @@ from app.schemas.exchange_balance import (
 )
 from app.schemas.exchange_trade import (
     ExchangeOrderActionResult,
+    ExchangeOrderExecution,
+    ExchangeOrderPlacement,
+)
+from app.schemas.exchange_trade import (
+    ExchangeOrderActionResult,
     ExchangeOrderPlacement,
 )
 from app.schemas.exchange_position import (
@@ -485,6 +490,109 @@ class BybitClient(BaseExchangeClient):
         )
 
         return response.model_dump()
+    
+    async def get_order_by_id(
+        self,
+        order_id: str,
+        category: str = "linear",
+        symbol: str | None = None,
+    ) -> dict | None:
+        normalized_category = category.lower()
+
+        params = {
+            "category": normalized_category,
+            "orderId": order_id,
+            "openOnly": "0",
+            "limit": "1",
+        }
+
+        if symbol:
+            params["symbol"] = symbol.upper()
+
+        payload = await self._private_get(
+            endpoint="/v5/order/realtime",
+            params=params,
+        )
+
+        result = payload.get("result", {})
+        orders = result.get("list", [])
+
+        if not orders:
+            return None
+
+        order_data = orders[0]
+        raw_side = order_data.get("side", "")
+
+        if raw_side == "Buy":
+            normalized_side = "BUY"
+        elif raw_side == "Sell":
+            normalized_side = "SELL"
+        else:
+            normalized_side = "UNKNOWN"
+
+        execution = ExchangeOrderExecution(
+            exchange="BYBIT",
+            category=normalized_category,
+            order_id=order_data.get(
+                "orderId",
+                order_id,
+            ),
+            client_order_id=order_data.get(
+                "orderLinkId",
+                "",
+            ),
+            symbol=order_data.get(
+                "symbol",
+                symbol.upper() if symbol else "",
+            ),
+            side=normalized_side,
+            order_type=order_data.get(
+                "orderType",
+                "",
+            ).upper(),
+            status=self._normalize_order_status(
+                order_data.get("orderStatus")
+            ),
+            quantity=to_float(
+                order_data.get("qty")
+            ),
+            filled_quantity=to_float(
+                order_data.get("cumExecQty")
+            ),
+            remaining_quantity=to_float(
+                order_data.get("leavesQty")
+            ),
+            price=to_float(
+                order_data.get("price")
+            ),
+            average_price=to_float(
+                order_data.get("avgPrice")
+            ),
+            cumulative_execution_value=to_float(
+                order_data.get("cumExecValue")
+            ),
+            cumulative_execution_fee=to_float(
+                order_data.get("cumExecFee")
+            ),
+            reduce_only=bool(
+                order_data.get("reduceOnly", False)
+            ),
+            close_on_trigger=bool(
+                order_data.get("closeOnTrigger", False)
+            ),
+            dry_run=False,
+            accepted=True,
+            verified=True,
+            created_at_ms=int(
+                order_data.get("createdTime") or 0
+            ),
+            updated_at_ms=int(
+                order_data.get("updatedTime") or 0
+            ),
+            message="Order status verified through Bybit.",
+        )
+
+        return execution.model_dump()
 
     async def get_ticker(self, symbol: str):
         try:
@@ -875,6 +983,7 @@ class BybitClient(BaseExchangeClient):
         normalized_symbol = symbol.upper()
         normalized_side = side.upper()
         bybit_side = "Buy" if normalized_side == "BUY" else "Sell"
+
         rules_data = await self.get_instrument_rules(
             symbol=normalized_symbol,
             category=category,
@@ -903,13 +1012,18 @@ class BybitClient(BaseExchangeClient):
             price=price_decimal,
             rules=rules,
         )
+
         body = {
             "category": category.lower(),
             "symbol": normalized_symbol,
             "side": bybit_side,
             "orderType": "Limit",
-            "qty": decimal_to_plain_string(quantity_decimal),
-            "price": decimal_to_plain_string(price_decimal),
+            "qty": decimal_to_plain_string(
+                quantity_decimal
+            ),
+            "price": decimal_to_plain_string(
+                price_decimal
+            ),
             "timeInForce": time_in_force,
             "reduceOnly": reduce_only,
             "closeOnTrigger": close_on_trigger,
@@ -930,7 +1044,10 @@ class BybitClient(BaseExchangeClient):
                 dry_run=True,
                 accepted=False,
                 client_order_id=client_order_id or "",
-                message="Dry run completed. No order was sent to Bybit.",
+                message=(
+                    "Dry run completed. "
+                    "No order was sent to Bybit."
+                ),
             ).model_dump()
 
         payload = await self._private_post(
@@ -939,6 +1056,46 @@ class BybitClient(BaseExchangeClient):
         )
 
         result = payload.get("result", {})
+
+        return ExchangeOrderPlacement(
+            exchange="BYBIT",
+            category=category.lower(),
+            order_id=result.get("orderId", ""),
+            client_order_id=result.get(
+                "orderLinkId",
+                "",
+            ),
+            symbol=normalized_symbol,
+            side=normalized_side,
+            order_type="LIMIT",
+            quantity=quantity,
+            price=price,
+            dry_run=False,
+            accepted=True,
+            message="Order request accepted by Bybit.",
+        ).model_dump()
+
+    @staticmethod
+    def _normalize_order_status(
+        bybit_status: str | None,
+    ) -> str:
+        status_mapping = {
+            "Created": "PENDING",
+            "New": "NEW",
+            "PartiallyFilled": "PARTIALLY_FILLED",
+            "Filled": "FILLED",
+            "Cancelled": "CANCELLED",
+            "PartiallyFilledCanceled": "CANCELLED",
+            "Rejected": "REJECTED",
+            "Deactivated": "EXPIRED",
+            "Untriggered": "PENDING",
+            "Triggered": "NEW",
+        }
+
+        return status_mapping.get(
+            bybit_status or "",
+            "UNKNOWN",
+        )
 
         return ExchangeOrderPlacement(
             exchange="BYBIT",

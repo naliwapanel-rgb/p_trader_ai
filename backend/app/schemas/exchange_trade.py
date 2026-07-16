@@ -7,7 +7,16 @@ TradingSide = Literal["BUY", "SELL"]
 TradingCategory = Literal["spot", "linear", "inverse"]
 OrderCategory = Literal["spot", "linear", "inverse", "option"]
 TimeInForce = Literal["GTC", "IOC", "FOK", "PostOnly"]
-
+NormalizedOrderStatus = Literal[
+    "PENDING",
+    "NEW",
+    "PARTIALLY_FILLED",
+    "FILLED",
+    "CANCELLED",
+    "REJECTED",
+    "EXPIRED",
+    "UNKNOWN",
+]
 
 class MarketOrderRequest(BaseModel):
     symbol: str = Field(min_length=3, max_length=30)
@@ -181,5 +190,39 @@ class ExchangeOrderActionResult(BaseModel):
 
     dry_run: bool
     accepted: bool
+
+    message: str
+
+class ExchangeOrderExecution(BaseModel):
+    exchange: str
+    category: str
+
+    order_id: str
+    client_order_id: str = ""
+
+    symbol: str
+    side: str
+    order_type: str
+    status: NormalizedOrderStatus
+
+    quantity: float = 0.0
+    filled_quantity: float = 0.0
+    remaining_quantity: float = 0.0
+
+    price: float = 0.0
+    average_price: float = 0.0
+
+    cumulative_execution_value: float = 0.0
+    cumulative_execution_fee: float = 0.0
+
+    reduce_only: bool = False
+    close_on_trigger: bool = False
+
+    dry_run: bool = False
+    accepted: bool = False
+    verified: bool = False
+
+    created_at_ms: int = 0
+    updated_at_ms: int = 0
 
     message: str
