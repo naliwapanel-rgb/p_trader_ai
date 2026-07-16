@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from app.exchanges.exceptions import ExchangeAPIException
 
 from app.exchanges.bybit.client import BybitClient
 
@@ -55,6 +56,92 @@ def test_normalize_order_status():
         == "UNKNOWN"
     )
 
+@pytest.mark.asyncio
+async def test_market_order_propagates_structured_bybit_rejection():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+
+    client._private_post = AsyncMock(
+        side_effect=ExchangeAPIException(
+            status_code=400,
+            exchange="BYBIT",
+            error_code=110006,
+            error_type="INSUFFICIENT_MARGIN",
+            message=(
+                "The available margin is insufficient "
+                "for this order."
+            ),
+            exchange_message="Insufficient margin",
+        )
+    )
+
+    client.get_order_by_id = AsyncMock()
+
+    with pytest.raises(ExchangeAPIException) as exc_info:
+        await client.place_market_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            quantity=0.001,
+            category="linear",
+            dry_run=False,
+        )
+
+    assert exc_info.value.error_code == 110006
+    assert exc_info.value.error_type == "INSUFFICIENT_MARGIN"
+
+    client.get_order_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_limit_order_does_not_verify_rejected_request():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+
+    client._private_post = AsyncMock(
+        side_effect=ExchangeAPIException(
+            status_code=409,
+            exchange="BYBIT",
+            error_code=170141,
+            error_type="DUPLICATE_CLIENT_ORDER_ID",
+            message="The client order ID has already been used.",
+            exchange_message="Duplicate clientOrderId",
+        )
+    )
+
+    client.get_order_by_id = AsyncMock()
+
+    with pytest.raises(ExchangeAPIException) as exc_info:
+        await client.place_limit_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            quantity=0.001,
+            price=50000,
+            category="linear",
+            client_order_id="duplicate-id",
+            dry_run=False,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert (
+        exc_info.value.error_type
+        == "DUPLICATE_CLIENT_ORDER_ID"
+    )
+
+    client.get_order_by_id.assert_not_awaited()
 
 @pytest.mark.asyncio
 async def test_get_order_by_id_normalizes_verified_order():

@@ -12,6 +12,8 @@ from app.schemas.exchange_balance import (
     ExchangeBalance,
     ExchangeCoinBalance,
 )
+from app.exchanges.bybit.errors import get_bybit_error
+from app.exchanges.exceptions import ExchangeAPIException
 from app.schemas.exchange_trade import (
     ExchangeOrderActionResult,
     ExchangeOrderExecution,
@@ -59,6 +61,32 @@ class BybitClient(BaseExchangeClient):
             api_key=api_key,
             api_secret=api_secret,
         )
+    @staticmethod
+    def _validate_bybit_payload(
+        payload: dict,
+    ) -> None:
+        ret_code = int(payload.get("retCode") or 0)
+
+        if ret_code == 0:
+            return
+
+        exchange_message = str(
+            payload.get("retMsg") or ""
+        )
+
+        error = get_bybit_error(
+            code=ret_code,
+            exchange_message=exchange_message,
+        )
+
+        raise ExchangeAPIException(
+            status_code=error.http_status,
+            exchange="BYBIT",
+            error_code=error.code,
+            error_type=error.error_type,
+            message=error.message,
+            exchange_message=exchange_message,
+        )
     async def _private_get(
         self,
         endpoint: str,
@@ -102,13 +130,17 @@ class BybitClient(BaseExchangeClient):
                 detail=f"Bybit API error: {message}",
             )
 
-        if response.status_code >= 400 or payload.get("retCode") != 0:
-            message = payload.get("retMsg") or "Request failed"
-
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Bybit API error: {message}",
+        if response.status_code >= 400 and payload.get("retCode") is None:
+            raise ExchangeAPIException(
+                status_code=response.status_code,
+                exchange="BYBIT",
+                error_code=response.status_code,
+                error_type="HTTP_ERROR",
+                message="Bybit returned an HTTP error.",
+                exchange_message=response.text.strip(),
             )
+
+        self._validate_bybit_payload(payload)
 
         return payload
     async def _private_post(
@@ -155,13 +187,17 @@ class BybitClient(BaseExchangeClient):
                 detail=f"Bybit API error: {message}",
             )
 
-        if response.status_code >= 400 or payload.get("retCode") != 0:
-            message = payload.get("retMsg") or "Request failed"
-
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Bybit API error: {message}",
+        if response.status_code >= 400 and payload.get("retCode") is None:
+            raise ExchangeAPIException(
+                status_code=response.status_code,
+                exchange="BYBIT",
+                error_code=response.status_code,
+                error_type="HTTP_ERROR",
+                message="Bybit returned an HTTP error.",
+                exchange_message=response.text.strip(),
             )
+
+        self._validate_bybit_payload(payload)
 
         return payload
 
