@@ -72,6 +72,11 @@ class BaseExchangeClient(ABC):
         time_in_force: str = "GTC",
         reduce_only: bool = False,
         close_on_trigger: bool = False,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        tp_trigger_by: str = "LastPrice",
+        sl_trigger_by: str = "LastPrice",
+        tpsl_mode: str = "Full",
         client_order_id: str | None = None,
         dry_run: bool = True,
     ):
@@ -120,8 +125,14 @@ class BaseExchangeClient(ABC):
         reduce_only: bool = False,
         close_on_trigger: bool = False,
         position_index: int = 0,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        tp_trigger_by: str = "LastPrice",
+        sl_trigger_by: str = "LastPrice",
+        tpsl_mode: str = "Full",
         client_order_id: str | None = None,
         dry_run: bool = True,
+        
     ):
         """Create or simulate a conditional stop-market order."""
         raise NotImplementedError

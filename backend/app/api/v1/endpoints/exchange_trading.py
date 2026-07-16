@@ -5,12 +5,12 @@ from app.api.dependencies import get_current_user
 from app.database.session import get_db
 from app.models.user import User
 from app.schemas.exchange_trade import (
-    AmendOrderRequest,
-    CancelOrderRequest,
-    LimitOrderRequest,
     MarketOrderRequest,
-    StopLimitOrderRequest,
+    LimitOrderRequest,
     StopMarketOrderRequest,
+    StopLimitOrderRequest,
+    CancelOrderRequest,
+    AmendOrderRequest,
 )
 from app.services.exchange_trading_service import ExchangeTradingService
 from app.utils.responses import success_response
@@ -58,43 +58,22 @@ async def place_stop_market_order(
         message="Stop-market order processed successfully",
         data=result,
     )
-@router.post("/{account_id}/orders/stop-limit")
-async def place_stop_limit_order(
+
+@router.post("/{account_id}/orders/limit")
+async def place_limit_order(
     account_id: int,
-    data: StopLimitOrderRequest,
+    data: LimitOrderRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session =Depends(get_db),
 ):
-    result = await ExchangeTradingService(
-        db
-    ).place_stop_limit_order(
+    result = await ExchangeTradingService(db).place_limit_order(
         current_user=current_user,
         account_id=account_id,
         data=data,
     )
 
     return success_response(
-        message="Stop-limit order processed successfully",
-        data=result,
-    )
-
-@router.post("/{account_id}/orders/stop-limit")
-async def place_stop_limit_order(
-    account_id: int,
-    data: StopLimitOrderRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    result = await ExchangeTradingService(
-        db
-    ).place_stop_limit_order(
-        current_user=current_user,
-        account_id=account_id,
-        data=data,
-    )
-
-    return success_response(
-        message="Stop-limit order processed successfully",
+        message="Limit order processed successfully",
         data=result,
     )
 @router.post("/{account_id}/orders/cancel")

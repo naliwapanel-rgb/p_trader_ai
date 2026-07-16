@@ -971,7 +971,58 @@ class BybitClient(BaseExchangeClient):
                     f"{rules.min_notional_value}"
                 ),
             )
-        
+    @staticmethod
+    def _validate_attached_tpsl(
+        take_profit: float | None,
+        stop_loss: float | None,
+        tp_trigger_by: str,
+        sl_trigger_by: str,
+        tpsl_mode: str,
+    ) -> None:
+        supported_trigger_types = {
+            "LastPrice",
+            "MarkPrice",
+            "IndexPrice",
+        }
+
+        if (
+            take_profit is not None
+            and take_profit <= 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Take-profit price must be greater than zero",
+            )
+
+        if (
+            stop_loss is not None
+            and stop_loss <= 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Stop-loss price must be greater than zero",
+            )
+
+        if tp_trigger_by not in supported_trigger_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported take-profit trigger type",
+            )
+
+        if sl_trigger_by not in supported_trigger_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported stop-loss trigger type",
+            )
+
+        if tpsl_mode != "Full":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Phase 6.7B Step 3A supports only "
+                    "full-position TP/SL"
+                ),
+            )
     async def place_market_order(
         self,
         symbol: str,
@@ -981,6 +1032,11 @@ class BybitClient(BaseExchangeClient):
         time_in_force: str = "IOC",
         reduce_only: bool = False,
         close_on_trigger: bool = False,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        tp_trigger_by: str = "LastPrice",
+        sl_trigger_by: str = "LastPrice",
+        tpsl_mode: str = "Full",
         client_order_id: str | None = None,
         dry_run: bool = True,
     ) -> dict:
@@ -991,7 +1047,7 @@ class BybitClient(BaseExchangeClient):
             symbol=normalized_symbol,
             category=category,
         )
-
+       
         rules = ExchangeInstrumentRules.model_validate(
             rules_data
         )
@@ -1013,7 +1069,63 @@ class BybitClient(BaseExchangeClient):
             "reduceOnly": reduce_only,
             "closeOnTrigger": close_on_trigger,
         }
+        self._validate_attached_tpsl(
+            take_profit=take_profit,
+            stop_loss=stop_loss,
+            tp_trigger_by=tp_trigger_by,
+            sl_trigger_by=sl_trigger_by,
+            tpsl_mode=tpsl_mode,
+        )
 
+        rules_data = await self.get_instrument_rules(
+            symbol=normalized_symbol,
+            category=category,
+        )
+
+        rules = ExchangeInstrumentRules.model_validate(
+            rules_data
+        )
+
+        quantity_decimal = to_decimal(quantity)
+
+        self._validate_quantity_against_rules(
+            quantity=quantity_decimal,
+            rules=rules,
+            order_type="MARKET",
+        )
+
+        body = {
+            "category": category.lower(),
+            "symbol": normalized_symbol,
+            "side": bybit_side,
+            "orderType": "Market",
+            "qty": decimal_to_plain_string(
+                quantity_decimal
+            ),
+            "timeInForce": time_in_force,
+            "reduceOnly": reduce_only,
+            "closeOnTrigger": close_on_trigger,
+        }
+
+        if client_order_id:
+            body["orderLinkId"] = client_order_id
+
+        if take_profit is not None:
+            body["takeProfit"] = decimal_to_plain_string(
+                to_decimal(take_profit)
+            )
+            body["tpTriggerBy"] = tp_trigger_by
+
+        if stop_loss is not None:
+            body["stopLoss"] = decimal_to_plain_string(
+                to_decimal(stop_loss)
+            )
+            body["slTriggerBy"] = sl_trigger_by
+
+        if take_profit is not None or stop_loss is not None:
+            body["tpslMode"] = tpsl_mode
+            body["tpOrderType"] = "Market"
+            body["slOrderType"] = "Market"
         if client_order_id:
             body["orderLinkId"] = client_order_id
 
@@ -1087,6 +1199,11 @@ class BybitClient(BaseExchangeClient):
         reduce_only: bool = False,
         close_on_trigger: bool = False,
         position_index: int = 0,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        tp_trigger_by: str = "LastPrice",
+        sl_trigger_by: str = "LastPrice",
+        tpsl_mode: str = "Full",
         client_order_id: str | None = None,
         dry_run: bool = True,
     ) -> dict:
@@ -1099,7 +1216,7 @@ class BybitClient(BaseExchangeClient):
             if normalized_side == "BUY"
             else "Sell"
         )
-
+        
         if trigger_direction not in {1, 2}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1179,7 +1296,25 @@ class BybitClient(BaseExchangeClient):
             "closeOnTrigger": close_on_trigger,
             "positionIdx": position_index,
         }
+        if take_profit is not None:
+            body["takeProfit"] = decimal_to_plain_string(
+                to_decimal(take_profit)
+            )
+            body["tpTriggerBy"] = tp_trigger_by
 
+        if stop_loss is not None:
+            body["stopLoss"] = decimal_to_plain_string(
+                to_decimal(stop_loss)
+            )
+            body["slTriggerBy"] = sl_trigger_by
+
+        if (
+            take_profit is not None
+            or stop_loss is not None
+        ):
+            body["tpslMode"] = tpsl_mode
+            body["tpOrderType"] = "Market"
+            body["slOrderType"] = "Market"
         if client_order_id:
             body["orderLinkId"] = client_order_id
 
@@ -1254,6 +1389,11 @@ class BybitClient(BaseExchangeClient):
         time_in_force: str = "GTC",
         reduce_only: bool = False,
         close_on_trigger: bool = False,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        tp_trigger_by: str = "LastPrice",
+        sl_trigger_by: str = "LastPrice",
+        tpsl_mode: str = "Full",
         client_order_id: str | None = None,
         dry_run: bool = True,
     ) -> dict:
@@ -1305,7 +1445,22 @@ class BybitClient(BaseExchangeClient):
             "reduceOnly": reduce_only,
             "closeOnTrigger": close_on_trigger,
         }
+        if take_profit is not None:
+            body["takeProfit"] = decimal_to_plain_string(
+                to_decimal(take_profit)
+            )
+            body["tpTriggerBy"] = tp_trigger_by
 
+        if stop_loss is not None:
+            body["stopLoss"] = decimal_to_plain_string(
+                to_decimal(stop_loss)
+            )
+            body["slTriggerBy"] = sl_trigger_by
+
+        if take_profit is not None or stop_loss is not None:
+            body["tpslMode"] = tpsl_mode
+            body["tpOrderType"] = "Market"
+            body["slOrderType"] = "Market"
         if client_order_id:
             body["orderLinkId"] = client_order_id
 

@@ -10,7 +10,15 @@ TradingCategory = Literal[
     "linear",
     "inverse",
 ]
+TpSlMode = Literal[
+    "Full",
+    "Partial",
+]
 
+TpSlOrderType = Literal[
+    "Market",
+    "Limit",
+]
 OrderCategory = Literal[
     "spot",
     "linear",
@@ -54,6 +62,21 @@ class MarketOrderRequest(BaseModel):
     reduce_only: bool = False
     close_on_trigger: bool = False
 
+    take_profit: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    stop_loss: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    tp_trigger_by: TriggerPriceType = "LastPrice"
+    sl_trigger_by: TriggerPriceType = "LastPrice"
+
+    tpsl_mode: TpSlMode = "Full"
+
     client_order_id: str | None = Field(
         default=None,
         min_length=1,
@@ -78,6 +101,21 @@ class LimitOrderRequest(BaseModel):
 
     reduce_only: bool = False
     close_on_trigger: bool = False
+
+    take_profit: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    stop_loss: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    tp_trigger_by: TriggerPriceType = "LastPrice"
+    sl_trigger_by: TriggerPriceType = "LastPrice"
+
+    tpsl_mode: TpSlMode = "Full"
 
     client_order_id: str | None = Field(
         default=None,
@@ -274,7 +312,20 @@ class StopMarketOrderRequest(BaseModel):
         ge=0,
         le=2,
     )
+    take_profit: float | None = Field(
+        default=None,
+        gt=0,
+    )
 
+    stop_loss: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    tp_trigger_by: TriggerPriceType = "LastPrice"
+    sl_trigger_by: TriggerPriceType = "LastPrice"
+
+    tpsl_mode: TpSlMode = "Full"
     client_order_id: str | None = Field(
         default=None,
         min_length=1,
@@ -311,7 +362,20 @@ class StopLimitOrderRequest(BaseModel):
         ge=0,
         le=2,
     )
+    take_profit: float | None = Field(
+        default=None,
+        gt=0,
+    )
 
+    stop_loss: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    tp_trigger_by: TriggerPriceType = "LastPrice"
+    sl_trigger_by: TriggerPriceType = "LastPrice"
+
+    tpsl_mode: TpSlMode = "Full"
     client_order_id: str | None = Field(
         default=None,
         min_length=1,
