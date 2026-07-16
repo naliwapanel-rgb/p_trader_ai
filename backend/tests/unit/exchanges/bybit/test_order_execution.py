@@ -5,37 +5,53 @@ import pytest
 from app.exchanges.bybit.client import BybitClient
 
 
+def valid_linear_rules() -> dict:
+    return {
+        "exchange": "BYBIT",
+        "category": "linear",
+        "symbol": "BTCUSDT",
+        "status": "Trading",
+        "base_coin": "BTC",
+        "quote_coin": "USDT",
+        "settle_coin": "USDT",
+        "min_price": "0.1",
+        "max_price": "1000000",
+        "tick_size": "0.1",
+        "min_order_quantity": "0.001",
+        "max_limit_order_quantity": "100",
+        "max_market_order_quantity": "50",
+        "quantity_step": "0.001",
+        "min_notional_value": "5",
+    }
+
+
 def test_normalize_order_status():
+    assert BybitClient._normalize_order_status("New") == "NEW"
+
     assert (
-        BybitClient._normalize_order_status("New")
-        == "NEW"
-    )
-    assert (
-        BybitClient._normalize_order_status(
-            "PartiallyFilled"
-        )
+        BybitClient._normalize_order_status("PartiallyFilled")
         == "PARTIALLY_FILLED"
     )
-    assert (
-        BybitClient._normalize_order_status("Filled")
-        == "FILLED"
-    )
+
+    assert BybitClient._normalize_order_status("Filled") == "FILLED"
+
     assert (
         BybitClient._normalize_order_status("Cancelled")
         == "CANCELLED"
     )
+
     assert (
         BybitClient._normalize_order_status("Rejected")
         == "REJECTED"
     )
+
     assert (
         BybitClient._normalize_order_status("Deactivated")
         == "EXPIRED"
     )
+
     assert (
-        BybitClient._normalize_order_status(
-            "UnexpectedStatus"
-        )
+        BybitClient._normalize_order_status("UnexpectedStatus")
         == "UNKNOWN"
     )
 
@@ -136,3 +152,100 @@ async def test_get_order_by_id_returns_none_when_not_found():
     )
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_market_order_returns_pending_when_not_yet_visible():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "result": {
+                "orderId": "market-pending-123",
+                "orderLinkId": "ptrader-pending-market",
+            },
+        }
+    )
+
+    client.get_order_by_id = AsyncMock(
+        return_value=None
+    )
+
+    result = await client.place_market_order(
+        symbol="BTCUSDT",
+        side="BUY",
+        quantity=0.001,
+        category="linear",
+        client_order_id="ptrader-pending-market",
+        dry_run=False,
+    )
+
+    assert result["order_id"] == "market-pending-123"
+    assert result["status"] == "PENDING"
+    assert result["accepted"] is True
+    assert result["verified"] is False
+    assert result["dry_run"] is False
+
+    client.get_order_by_id.assert_awaited_once_with(
+        order_id="market-pending-123",
+        category="linear",
+        symbol="BTCUSDT",
+    )
+
+
+@pytest.mark.asyncio
+async def test_limit_order_returns_pending_when_not_yet_visible():
+    client = BybitClient(
+        api_key="test_key",
+        api_secret="test_secret",
+        is_testnet=False,
+    )
+
+    client.get_instrument_rules = AsyncMock(
+        return_value=valid_linear_rules()
+    )
+
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "result": {
+                "orderId": "limit-pending-456",
+                "orderLinkId": "ptrader-pending-limit",
+            },
+        }
+    )
+
+    client.get_order_by_id = AsyncMock(
+        return_value=None
+    )
+
+    result = await client.place_limit_order(
+        symbol="BTCUSDT",
+        side="SELL",
+        quantity=0.001,
+        price=50000.0,
+        category="linear",
+        client_order_id="ptrader-pending-limit",
+        dry_run=False,
+    )
+
+    assert result["order_id"] == "limit-pending-456"
+    assert result["status"] == "PENDING"
+    assert result["accepted"] is True
+    assert result["verified"] is False
+    assert result["dry_run"] is False
+
+    client.get_order_by_id.assert_awaited_once_with(
+        order_id="limit-pending-456",
+        category="linear",
+        symbol="BTCUSDT",
+    )

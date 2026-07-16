@@ -108,6 +108,7 @@ async def test_market_order_live_mode_builds_correct_bybit_body():
     client.get_instrument_rules = AsyncMock(
         return_value=valid_linear_rules()
     )
+
     client._private_post = AsyncMock(
         return_value={
             "retCode": 0,
@@ -116,6 +117,34 @@ async def test_market_order_live_mode_builds_correct_bybit_body():
                 "orderId": "bybit-order-123",
                 "orderLinkId": "ptrader-market-001",
             },
+        }
+    )
+
+    client.get_order_by_id = AsyncMock(
+        return_value={
+            "exchange": "BYBIT",
+            "category": "linear",
+            "order_id": "bybit-order-123",
+            "client_order_id": "ptrader-market-001",
+            "symbol": "BTCUSDT",
+            "side": "BUY",
+            "order_type": "MARKET",
+            "status": "NEW",
+            "quantity": 0.001,
+            "filled_quantity": 0.0,
+            "remaining_quantity": 0.001,
+            "price": 0.0,
+            "average_price": 0.0,
+            "cumulative_execution_value": 0.0,
+            "cumulative_execution_fee": 0.0,
+            "reduce_only": False,
+            "close_on_trigger": False,
+            "dry_run": False,
+            "accepted": True,
+            "verified": True,
+            "created_at_ms": 0,
+            "updated_at_ms": 0,
+            "message": "Order status verified through Bybit.",
         }
     )
 
@@ -144,10 +173,17 @@ async def test_market_order_live_mode_builds_correct_bybit_body():
         },
     )
 
-    assert result["order_id"] == "bybit-order-123"
-    assert result["accepted"] is True
-    assert result["dry_run"] is False
+    client.get_order_by_id.assert_awaited_once_with(
+        order_id="bybit-order-123",
+        category="linear",
+        symbol="BTCUSDT",
+    )
 
+    assert result["order_id"] == "bybit-order-123"
+    assert result["status"] == "NEW"
+    assert result["accepted"] is True
+    assert result["verified"] is True
+    assert result["dry_run"] is False
 
 @pytest.mark.asyncio
 async def test_limit_order_live_mode_builds_correct_bybit_body():
@@ -160,6 +196,26 @@ async def test_limit_order_live_mode_builds_correct_bybit_body():
     client.get_instrument_rules = AsyncMock(
         return_value=valid_linear_rules()
     )
+    client.get_order_by_id = AsyncMock(
+    return_value={
+        "exchange": "BYBIT",
+        "category": "linear",
+        "order_id": "bybit-order-456",
+        "client_order_id": "ptrader-limit-001",
+        "symbol": "ETHUSDT",
+        "side": "SELL",
+        "order_type": "LIMIT",
+        "status": "NEW",
+        "quantity": 0.01,
+        "filled_quantity": 0.0,
+        "remaining_quantity": 0.01,
+        "price": 5000.0,
+        "average_price": 0.0,
+        "accepted": True,
+        "verified": True,
+        "dry_run": False,
+    }
+)
     client._private_post = AsyncMock(
         return_value={
             "retCode": 0,
@@ -182,7 +238,7 @@ async def test_limit_order_live_mode_builds_correct_bybit_body():
         client_order_id="ptrader-limit-001",
         dry_run=False,
     )
-
+    
     client._private_post.assert_awaited_once_with(
         endpoint="/v5/order/create",
         body={
@@ -198,7 +254,14 @@ async def test_limit_order_live_mode_builds_correct_bybit_body():
             "orderLinkId": "ptrader-limit-001",
         },
     )
+    client.get_order_by_id.assert_awaited_once_with(
+        order_id="bybit-order-456",
+        category="linear",
+        symbol="ETHUSDT",
+    )
 
+    assert result["status"] == "NEW"
+    assert result["verified"] is True
     assert result["order_id"] == "bybit-order-456"
     assert result["accepted"] is True
     assert result["dry_run"] is False

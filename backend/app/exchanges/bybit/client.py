@@ -59,7 +59,58 @@ class BybitClient(BaseExchangeClient):
             api_key=api_key,
             api_secret=api_secret,
         )
+    async def _private_get(
+        self,
+        endpoint: str,
+        params: dict[str, str] | None = None,
+    ) -> dict:
+        request_params = params or {}
+        query_string = urlencode(request_params)
 
+        url = f"{self.base_url}{endpoint}"
+
+        if query_string:
+            url = f"{url}?{query_string}"
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.get(
+                    url,
+                    headers=self.auth.headers(query_string),
+                )
+        except httpx.TimeoutException as exc:
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Bybit request timed out",
+            ) from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Unable to connect to Bybit: {exc}",
+            ) from exc
+
+        try:
+            payload = response.json()
+        except ValueError:
+            message = (
+                response.text.strip()
+                or "Invalid response from Bybit"
+            )
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Bybit API error: {message}",
+            )
+
+        if response.status_code >= 400 or payload.get("retCode") != 0:
+            message = payload.get("retMsg") or "Request failed"
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Bybit API error: {message}",
+            )
+
+        return payload
     async def _private_post(
         self,
         endpoint: str,
@@ -951,20 +1002,39 @@ class BybitClient(BaseExchangeClient):
         )
 
         result = payload.get("result", {})
+        order_id = result.get("orderId", "")
+        returned_client_order_id = result.get(
+            "orderLinkId",
+            client_order_id or "",
+        )
 
-        return ExchangeOrderPlacement(
+        verified_order = await self.get_order_by_id(
+            order_id=order_id,
+            category=category,
+            symbol=normalized_symbol,
+        )
+
+        if verified_order is not None:
+            return verified_order
+
+        return ExchangeOrderExecution(
             exchange="BYBIT",
             category=category.lower(),
-            order_id=result.get("orderId", ""),
-            client_order_id=result.get("orderLinkId", ""),
+            order_id=order_id,
+            client_order_id=returned_client_order_id,
             symbol=normalized_symbol,
             side=normalized_side,
             order_type="MARKET",
+            status="PENDING",
             quantity=quantity,
             price=0.0,
             dry_run=False,
             accepted=True,
-            message="Order request accepted by Bybit.",
+            verified=False,
+            message=(
+                "Order accepted by Bybit, but its status "
+                "is not available yet."
+            ),
         ).model_dump()
 
     async def place_limit_order(
@@ -1056,23 +1126,39 @@ class BybitClient(BaseExchangeClient):
         )
 
         result = payload.get("result", {})
+        order_id = result.get("orderId", "")
+        returned_client_order_id = result.get(
+            "orderLinkId",
+            client_order_id or "",
+        )
 
-        return ExchangeOrderPlacement(
+        verified_order = await self.get_order_by_id(
+            order_id=order_id,
+            category=category,
+            symbol=normalized_symbol,
+        )
+
+        if verified_order is not None:
+            return verified_order
+
+        return ExchangeOrderExecution(
             exchange="BYBIT",
             category=category.lower(),
-            order_id=result.get("orderId", ""),
-            client_order_id=result.get(
-                "orderLinkId",
-                "",
-            ),
+            order_id=order_id,
+            client_order_id=returned_client_order_id,
             symbol=normalized_symbol,
             side=normalized_side,
             order_type="LIMIT",
+            status="PENDING",
             quantity=quantity,
             price=price,
             dry_run=False,
             accepted=True,
-            message="Order request accepted by Bybit.",
+            verified=False,
+            message=(
+                "Order accepted by Bybit, but its status "
+                "is not available yet."
+            ),
         ).model_dump()
 
     @staticmethod
