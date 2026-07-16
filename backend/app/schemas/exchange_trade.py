@@ -51,6 +51,7 @@ NormalizedOrderStatus = Literal[
     "EXPIRED",
     "UNKNOWN",
 ]
+
 class MarketOrderRequest(BaseModel):
     symbol: str = Field(min_length=3, max_length=30)
     side: TradingSide
@@ -411,3 +412,131 @@ class StopLimitOrderRequest(BaseModel):
     def normalize_values(self):
         self.symbol = self.symbol.upper()
         return self
+    
+class PositionTpSlRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+
+    category: TradingCategory = "linear"
+
+    position_index: int = Field(
+        default=0,
+        ge=0,
+        le=2,
+    )
+
+    take_profit: float | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    stop_loss: float | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    tp_trigger_by: TriggerPriceType = "LastPrice"
+    sl_trigger_by: TriggerPriceType = "LastPrice"
+
+    tpsl_mode: TpSlMode = "Full"
+
+    tp_order_type: TpSlOrderType = "Market"
+    sl_order_type: TpSlOrderType = "Market"
+
+    tp_size: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    sl_size: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    tp_limit_price: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    sl_limit_price: float | None = Field(
+        default=None,
+        gt=0,
+    )
+
+    @model_validator(mode="after")
+    def validate_position_tpsl(self):
+        self.symbol = self.symbol.upper()
+
+        if self.take_profit is None and self.stop_loss is None:
+            raise ValueError(
+                "At least one of take_profit or stop_loss is required"
+            )
+
+        if self.tpsl_mode == "Full":
+            if (
+                self.tp_order_type != "Market"
+                or self.sl_order_type != "Market"
+            ):
+                raise ValueError(
+                    "Full TP/SL mode supports only market orders"
+                )
+
+            if (
+                self.tp_size is not None
+                or self.sl_size is not None
+            ):
+                raise ValueError(
+                    "TP/SL sizes are allowed only in Partial mode"
+                )
+
+            if (
+                self.tp_limit_price is not None
+                or self.sl_limit_price is not None
+            ):
+                raise ValueError(
+                    "Limit TP/SL prices are allowed only in Partial mode"
+                )
+
+        if self.tpsl_mode == "Partial":
+            if self.tp_size is None or self.sl_size is None:
+                raise ValueError(
+                    "tp_size and sl_size are required in Partial mode"
+                )
+
+            if self.tp_size != self.sl_size:
+                raise ValueError(
+                    "tp_size and sl_size must be equal"
+                )
+
+        if (
+            self.tp_order_type == "Limit"
+            and self.tp_limit_price is None
+        ):
+            raise ValueError(
+                "tp_limit_price is required for limit take-profit"
+            )
+
+        if (
+            self.sl_order_type == "Limit"
+            and self.sl_limit_price is None
+        ):
+            raise ValueError(
+                "sl_limit_price is required for limit stop-loss"
+            )
+
+        return self
+    
+class PositionTpSlResult(BaseModel):
+    exchange: str
+    category: str
+    symbol: str
+    position_index: int
+
+    action: Literal["SET_POSITION_TPSL"]
+
+    dry_run: bool
+    accepted: bool
+
+    message: str

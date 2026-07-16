@@ -92,6 +92,28 @@ class BaseExchangeClient(ABC):
         raise NotImplementedError
     
     @abstractmethod
+    async def set_position_tpsl(
+        self,
+        symbol: str,
+        category: str = "linear",
+        position_index: int = 0,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        tp_trigger_by: str = "LastPrice",
+        sl_trigger_by: str = "LastPrice",
+        tpsl_mode: str = "Full",
+        tp_order_type: str = "Market",
+        sl_order_type: str = "Market",
+        tp_size: float | None = None,
+        sl_size: float | None = None,
+        tp_limit_price: float | None = None,
+        sl_limit_price: float | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        """Set or update TP/SL on an existing position."""
+        raise NotImplementedError
+    
+    @abstractmethod
     async def cancel_order(
         self,
         symbol: str,

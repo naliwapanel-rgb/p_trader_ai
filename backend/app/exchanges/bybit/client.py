@@ -12,6 +12,7 @@ from app.schemas.exchange_balance import (
     ExchangeBalance,
     ExchangeCoinBalance,
 )
+from app.schemas.exchange_trade import PositionTpSlResult
 from app.exchanges.bybit.errors import get_bybit_error
 from app.exchanges.exceptions import ExchangeAPIException
 from app.schemas.exchange_trade import (
@@ -1895,7 +1896,142 @@ class BybitClient(BaseExchangeClient):
             accepted=True,
             message="Amendment request accepted by Bybit.",
         ).model_dump()
-        
+    
+    async def set_position_tpsl(
+        self,
+        symbol: str,
+        category: str = "linear",
+        position_index: int = 0,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        tp_trigger_by: str = "LastPrice",
+        sl_trigger_by: str = "LastPrice",
+        tpsl_mode: str = "Full",
+        tp_order_type: str = "Market",
+        sl_order_type: str = "Market",
+        tp_size: float | None = None,
+        sl_size: float | None = None,
+        tp_limit_price: float | None = None,
+        sl_limit_price: float | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_category = category.lower()
+
+        self._validate_attached_tpsl(
+            take_profit=take_profit,
+            stop_loss=stop_loss,
+            tp_trigger_by=tp_trigger_by,
+            sl_trigger_by=sl_trigger_by,
+            tpsl_mode=tpsl_mode,
+            tp_order_type=tp_order_type,
+            sl_order_type=sl_order_type,
+            tp_limit_price=tp_limit_price,
+            sl_limit_price=sl_limit_price,
+        )
+
+        if take_profit is None and stop_loss is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "At least one of take_profit "
+                    "or stop_loss is required"
+                ),
+            )
+
+        if position_index not in {0, 1, 2}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="position_index must be 0, 1 or 2",
+            )
+
+        if tpsl_mode == "Partial":
+            if tp_size is None or sl_size is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "tp_size and sl_size are required "
+                        "in Partial mode"
+                    ),
+                )
+
+            if to_decimal(tp_size) != to_decimal(sl_size):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="tp_size and sl_size must be equal",
+                )
+
+        body = {
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+            "tpslMode": tpsl_mode,
+            "positionIdx": position_index,
+        }
+
+        if take_profit is not None:
+            body["takeProfit"] = decimal_to_plain_string(
+                to_decimal(take_profit)
+            )
+            body["tpTriggerBy"] = tp_trigger_by
+            body["tpOrderType"] = tp_order_type
+
+        if stop_loss is not None:
+            body["stopLoss"] = decimal_to_plain_string(
+                to_decimal(stop_loss)
+            )
+            body["slTriggerBy"] = sl_trigger_by
+            body["slOrderType"] = sl_order_type
+
+        if tp_size is not None:
+            body["tpSize"] = decimal_to_plain_string(
+                to_decimal(tp_size)
+            )
+
+        if sl_size is not None:
+            body["slSize"] = decimal_to_plain_string(
+                to_decimal(sl_size)
+            )
+
+        if tp_limit_price is not None:
+            body["tpLimitPrice"] = decimal_to_plain_string(
+                to_decimal(tp_limit_price)
+            )
+
+        if sl_limit_price is not None:
+            body["slLimitPrice"] = decimal_to_plain_string(
+                to_decimal(sl_limit_price)
+            )
+
+        if dry_run:
+            return PositionTpSlResult(
+                exchange="BYBIT",
+                category=normalized_category,
+                symbol=normalized_symbol,
+                position_index=position_index,
+                action="SET_POSITION_TPSL",
+                dry_run=True,
+                accepted=False,
+                message=(
+                    "Dry run completed. "
+                    "No position TP/SL update was sent to Bybit."
+                ),
+            ).model_dump()
+
+        await self._private_post(
+            endpoint="/v5/position/trading-stop",
+            body=body,
+        )
+
+        return PositionTpSlResult(
+            exchange="BYBIT",
+            category=normalized_category,
+            symbol=normalized_symbol,
+            position_index=position_index,
+            action="SET_POSITION_TPSL",
+            dry_run=False,
+            accepted=True,
+            message="Position TP/SL update accepted by Bybit.",
+        ).model_dump()
     async def place_stop_market_order(
         self,
         symbol: str,
@@ -2060,3 +2196,4 @@ async def place_stop_limit_order(
     **kwargs,
 ):
     raise NotImplementedError
+

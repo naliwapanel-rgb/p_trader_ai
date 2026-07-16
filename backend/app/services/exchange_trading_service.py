@@ -181,7 +181,37 @@ class ExchangeTradingService:
                 or not self.settings.exchange_trading_enabled
             ),
         )
-    
+    async def set_position_tpsl(
+        self,
+        current_user: User,
+        account_id: int,
+        data: PositionTpSlRequest,
+    ) -> dict:
+        client = self._get_client(
+            current_user=current_user,
+            account_id=account_id,
+        )
+
+        return await client.set_position_tpsl(
+            symbol=data.symbol,
+            category=data.category,
+            position_index=data.position_index,
+            take_profit=data.take_profit,
+            stop_loss=data.stop_loss,
+            tp_trigger_by=data.tp_trigger_by,
+            sl_trigger_by=data.sl_trigger_by,
+            tpsl_mode=data.tpsl_mode,
+            tp_order_type=data.tp_order_type,
+            sl_order_type=data.sl_order_type,
+            tp_size=data.tp_size,
+            sl_size=data.sl_size,
+            tp_limit_price=data.tp_limit_price,
+            sl_limit_price=data.sl_limit_price,
+            dry_run=(
+                self.settings.exchange_dry_run
+                or not self.settings.exchange_trading_enabled
+            ),
+        )
     async def place_stop_limit_order(
         self,
         current_user: User,
@@ -219,3 +249,4 @@ class ExchangeTradingService:
                 or not self.settings.exchange_trading_enabled
             ),
         )
+    
