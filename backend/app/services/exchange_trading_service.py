@@ -5,15 +5,13 @@ from app.core.config import get_settings
 from app.exchanges.factory import ExchangeFactory
 from app.models.user import User
 from app.schemas.exchange_trade import (
-    LimitOrderRequest,
-    MarketOrderRequest,
-)
-from app.schemas.exchange_trade import (
     AmendOrderRequest,
     CancelOrderRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    StopMarketOrderRequest,
 )
+
 from app.services.exchange_account_service import ExchangeAccountService
 
 

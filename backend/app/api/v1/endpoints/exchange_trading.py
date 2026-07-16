@@ -5,14 +5,11 @@ from app.api.dependencies import get_current_user
 from app.database.session import get_db
 from app.models.user import User
 from app.schemas.exchange_trade import (
-    LimitOrderRequest,
-    MarketOrderRequest,
-)
-from app.schemas.exchange_trade import (
     AmendOrderRequest,
     CancelOrderRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    StopMarketOrderRequest,
 )
 from app.services.exchange_trading_service import ExchangeTradingService
 from app.utils.responses import success_response
@@ -41,7 +38,25 @@ async def place_market_order(
         message="Market order processed successfully",
         data=result,
     )
+@router.post("/{account_id}/orders/stop-market")
+async def place_stop_market_order(
+    account_id: int,
+    data: StopMarketOrderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    result = await ExchangeTradingService(
+        db
+    ).place_stop_market_order(
+        current_user=current_user,
+        account_id=account_id,
+        data=data,
+    )
 
+    return success_response(
+        message="Stop-market order processed successfully",
+        data=result,
+    )
 
 @router.post("/{account_id}/orders/limit")
 async def place_limit_order(

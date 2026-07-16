@@ -1452,3 +1452,156 @@ class BybitClient(BaseExchangeClient):
             accepted=True,
             message="Amendment request accepted by Bybit.",
         ).model_dump()
+        
+    async def place_stop_market_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        trigger_price: float,
+        trigger_direction: int,
+        trigger_by: str = "LastPrice",
+        category: str = "linear",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        position_index: int = 0,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_side = side.upper()
+        normalized_category = category.lower()
+
+        bybit_side = (
+            "Buy"
+            if normalized_side == "BUY"
+            else "Sell"
+        )
+
+        if trigger_direction not in {1, 2}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "trigger_direction must be 1 "
+                    "for rising price or 2 for falling price"
+                ),
+            )
+
+        supported_trigger_types = {
+            "LastPrice",
+            "MarkPrice",
+            "IndexPrice",
+        }
+
+        if trigger_by not in supported_trigger_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported Bybit trigger price type",
+            )
+
+        rules_data = await self.get_instrument_rules(
+            symbol=normalized_symbol,
+            category=normalized_category,
+        )
+
+        rules = ExchangeInstrumentRules.model_validate(
+            rules_data
+        )
+
+        quantity_decimal = to_decimal(quantity)
+        trigger_price_decimal = to_decimal(
+            trigger_price
+        )
+
+        self._validate_quantity_against_rules(
+            quantity=quantity_decimal,
+            rules=rules,
+            order_type="MARKET",
+        )
+
+        self._validate_limit_price_against_rules(
+            price=trigger_price_decimal,
+            rules=rules,
+        )
+
+        body = {
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+            "side": bybit_side,
+            "orderType": "Market",
+            "qty": decimal_to_plain_string(
+                quantity_decimal
+            ),
+            "triggerPrice": decimal_to_plain_string(
+                trigger_price_decimal
+            ),
+            "triggerDirection": trigger_direction,
+            "triggerBy": trigger_by,
+            "reduceOnly": reduce_only,
+            "closeOnTrigger": close_on_trigger,
+            "positionIdx": position_index,
+        }
+
+        if client_order_id:
+            body["orderLinkId"] = client_order_id
+
+        if dry_run:
+            return ExchangeOrderExecution(
+                exchange="BYBIT",
+                category=normalized_category,
+                order_id="",
+                client_order_id=client_order_id or "",
+                symbol=normalized_symbol,
+                side=normalized_side,
+                order_type="STOP_MARKET",
+                status="PENDING",
+                quantity=quantity,
+                price=trigger_price,
+                dry_run=True,
+                accepted=False,
+                verified=False,
+                message=(
+                    "Dry run completed. "
+                    "No stop-market order was sent to Bybit."
+                ),
+            ).model_dump()
+
+        payload = await self._private_post(
+            endpoint="/v5/order/create",
+            body=body,
+        )
+
+        result = payload.get("result", {})
+        order_id = result.get("orderId", "")
+
+        verified_order = await self.get_order_by_id(
+            order_id=order_id,
+            category=normalized_category,
+            symbol=normalized_symbol,
+        )
+
+        if verified_order is not None:
+            return verified_order
+
+        return ExchangeOrderExecution(
+            exchange="BYBIT",
+            category=normalized_category,
+            order_id=order_id,
+            client_order_id=result.get(
+                "orderLinkId",
+                client_order_id or "",
+            ),
+            symbol=normalized_symbol,
+            side=normalized_side,
+            order_type="STOP_MARKET",
+            status="PENDING",
+            quantity=quantity,
+            price=trigger_price,
+            dry_run=False,
+            accepted=True,
+            verified=False,
+            message=(
+                "Stop-market order accepted by Bybit, "
+                "but its status is not available yet."
+            ),
+        ).model_dump()

@@ -106,3 +106,22 @@ class BaseExchangeClient(ABC):
     ):
         """Amend or simulate amendment of an active order."""
         raise NotImplementedError
+    
+    @abstractmethod
+    async def place_stop_market_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        trigger_price: float,
+        trigger_direction: int,
+        trigger_by: str = "LastPrice",
+        category: str = "linear",
+        reduce_only: bool = False,
+        close_on_trigger: bool = False,
+        position_index: int = 0,
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ):
+        """Create or simulate a conditional stop-market order."""
+        raise NotImplementedError
