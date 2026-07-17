@@ -20,6 +20,8 @@ def long_position() -> dict:
                 "side": "LONG",
                 "size": 1.0,
                 "position_index": 0,
+                "take_profit": 71000.0,
+                "stop_loss": 64000.0,
             }
         ],
     }
@@ -99,7 +101,7 @@ async def test_set_position_tp_only():
         dry_run=True,
     )
     assert result["take_profit"] == 72000.0
-    assert result["stop_loss"] is None
+    assert result["stop_loss"] == 64000.0
 @pytest.mark.asyncio
 async def test_set_position_sl_only():
     client = make_client()
@@ -112,7 +114,7 @@ async def test_set_position_sl_only():
         stop_loss=65000,
         dry_run=True,
     )
-    assert result["take_profit"] is None
+    assert result["take_profit"] == 71000.0
     assert result["stop_loss"] == 65000.0
 @pytest.mark.asyncio
 async def test_set_position_tp_sl_requires_value():
@@ -226,3 +228,192 @@ async def test_set_position_tp_sl_selects_requested_hedge_side():
     )
     assert result["position_side"] == "SHORT"
     assert result["position_index"] == 2
+@pytest.mark.asyncio
+async def test_modify_tp_preserves_existing_stop_loss():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value=long_position()
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.set_position_tp_sl(
+        symbol="BTCUSDT",
+        take_profit=73000,
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "takeProfit": "73000",
+            "tpTriggerBy": "MarkPrice",
+            "stopLoss": "64000",
+            "slTriggerBy": "MarkPrice",
+        },
+    )
+    assert result["take_profit"] == 73000.0
+    assert result["stop_loss"] == 64000.0
+    assert result["accepted"] is True
+@pytest.mark.asyncio
+async def test_modify_sl_preserves_existing_take_profit():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value=long_position()
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.set_position_tp_sl(
+        symbol="BTCUSDT",
+        stop_loss=66000,
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "takeProfit": "71000",
+            "tpTriggerBy": "MarkPrice",
+            "stopLoss": "66000",
+            "slTriggerBy": "MarkPrice",
+        },
+    )
+    assert result["take_profit"] == 71000.0
+    assert result["stop_loss"] == 66000.0
+    assert result["accepted"] is True
+@pytest.mark.asyncio
+async def test_modify_both_replaces_existing_tp_sl():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value=long_position()
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.set_position_tp_sl(
+        symbol="BTCUSDT",
+        take_profit=74000,
+        stop_loss=67000,
+        tp_trigger_by="LastPrice",
+        sl_trigger_by="IndexPrice",
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "takeProfit": "74000",
+            "tpTriggerBy": "LastPrice",
+            "stopLoss": "67000",
+            "slTriggerBy": "IndexPrice",
+        },
+    )
+    assert result["take_profit"] == 74000.0
+    assert result["stop_loss"] == 67000.0
+@pytest.mark.asyncio
+async def test_tp_only_without_existing_sl_sends_only_tp():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value={
+            "positions": [
+                {
+                    "symbol": "BTCUSDT",
+                    "side": "LONG",
+                    "size": 1.0,
+                    "position_index": 0,
+                    "take_profit": 0,
+                    "stop_loss": 0,
+                }
+            ]
+        }
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.set_position_tp_sl(
+        symbol="BTCUSDT",
+        take_profit=72000,
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "takeProfit": "72000",
+            "tpTriggerBy": "MarkPrice",
+        },
+    )
+    assert result["take_profit"] == 72000.0
+    assert result["stop_loss"] is None
+@pytest.mark.asyncio
+async def test_sl_only_without_existing_tp_sends_only_sl():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value={
+            "positions": [
+                {
+                    "symbol": "BTCUSDT",
+                    "side": "LONG",
+                    "size": 1.0,
+                    "position_index": 0,
+                    "take_profit": 0,
+                    "stop_loss": 0,
+                }
+            ]
+        }
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.set_position_tp_sl(
+        symbol="BTCUSDT",
+        stop_loss=65000,
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "stopLoss": "65000",
+            "slTriggerBy": "MarkPrice",
+        },
+    )
+    assert result["take_profit"] is None
+    assert result["stop_loss"] == 65000.0
+

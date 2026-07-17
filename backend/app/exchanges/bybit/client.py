@@ -957,20 +957,44 @@ class BybitClient(BaseExchangeClient):
         position_index = int(
             position.get("position_index") or 0
         )
+        existing_take_profit = to_decimal(
+            position.get("take_profit") or 0
+        )
+        existing_stop_loss = to_decimal(
+            position.get("stop_loss") or 0
+        )
+        effective_take_profit = (
+            take_profit_decimal
+            if take_profit_decimal is not None
+            else (
+                existing_take_profit
+                if existing_take_profit > 0
+                else None
+            )
+        )
+        effective_stop_loss = (
+            stop_loss_decimal
+            if stop_loss_decimal is not None
+            else (
+                existing_stop_loss
+                if existing_stop_loss > 0
+                else None
+            )
+        )
         body = {
             "category": normalized_category,
             "symbol": normalized_symbol,
             "tpslMode": "Full",
             "positionIdx": position_index,
         }
-        if take_profit_decimal is not None:
+        if effective_take_profit is not None:
             body["takeProfit"] = decimal_to_plain_string(
-                take_profit_decimal
+                effective_take_profit.normalize()
             )
             body["tpTriggerBy"] = normalized_tp_trigger
-        if stop_loss_decimal is not None:
+        if effective_stop_loss is not None:
             body["stopLoss"] = decimal_to_plain_string(
-                stop_loss_decimal
+                effective_stop_loss.normalize()
             )
             body["slTriggerBy"] = normalized_sl_trigger
         result = {
@@ -980,23 +1004,23 @@ class BybitClient(BaseExchangeClient):
             "position_side": detected_side,
             "position_index": position_index,
             "take_profit": (
-                float(take_profit_decimal)
-                if take_profit_decimal is not None
+                float(effective_take_profit)
+                if effective_take_profit is not None
                 else None
             ),
             "stop_loss": (
-                float(stop_loss_decimal)
-                if stop_loss_decimal is not None
+                float(effective_stop_loss)
+                if effective_stop_loss is not None
                 else None
             ),
             "tp_trigger_by": (
                 normalized_tp_trigger
-                if take_profit_decimal is not None
+                if effective_take_profit is not None
                 else None
             ),
             "sl_trigger_by": (
                 normalized_sl_trigger
-                if stop_loss_decimal is not None
+                if effective_stop_loss is not None
                 else None
             ),
             "dry_run": dry_run,
