@@ -94,3 +94,15 @@ class GateIOClient(BaseExchangeClient):
         dry_run: bool = True,
     ):
         raise NotImplementedError
+    async def close_position(
+        self,
+        symbol: str,
+        position_side: str,
+        quantity: float,
+        category: str = "linear",
+        position_index: int = 0,
+        time_in_force: str = "IOC",
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        raise NotImplementedError

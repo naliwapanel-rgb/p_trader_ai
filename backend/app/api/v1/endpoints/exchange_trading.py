@@ -96,3 +96,23 @@ async def amend_order(
         message="Order amendment processed successfully",
         data=result,
     )
+
+@router.post("/{account_id}/positions/close")
+async def close_position(
+    account_id: int,
+    data: ClosePositionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    result = await ExchangeTradingService(
+        db
+    ).close_position(
+        current_user=current_user,
+        account_id=account_id,
+        data=data,
+    )
+
+    return success_response(
+        message="Position close processed successfully",
+        data=result,
+    )

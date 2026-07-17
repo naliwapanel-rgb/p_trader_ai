@@ -106,3 +106,18 @@ class BaseExchangeClient(ABC):
     ):
         """Amend or simulate amendment of an active order."""
         raise NotImplementedError
+    
+    @abstractmethod
+    async def close_position(
+        self,
+        symbol: str,
+        position_side: str,
+        quantity: float,
+        category: str = "linear",
+        position_index: int = 0,
+        time_in_force: str = "IOC",
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        """Close all or part of an existing position."""
+        raise NotImplementedError

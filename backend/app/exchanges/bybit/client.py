@@ -1,45 +1,39 @@
 import json
+from decimal import Decimal
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException, status
 
-from app.schemas.exchange_trade import ExchangeOrderPlacement
 from app.exchanges.base import BaseExchangeClient
 from app.exchanges.bybit.auth import BybitAuth
-from app.exchanges.utils import to_float
-from app.schemas.exchange_balance import (
-    ExchangeBalance,
-    ExchangeCoinBalance,
-)
 from app.exchanges.bybit.errors import get_bybit_error
-from app.exchanges.exceptions import ExchangeAPIException
-from app.schemas.exchange_trade import (
-    ExchangeOrderActionResult,
-    ExchangeOrderExecution,
-    ExchangeOrderPlacement,
-)
-from app.schemas.exchange_trade import (
-    ExchangeOrderActionResult,
-    ExchangeOrderPlacement,
-)
-from app.schemas.exchange_position import (
-    ExchangePosition,
-    ExchangePositionList,
-)
-from decimal import Decimal
-
 from app.exchanges.decimal_utils import (
     decimal_to_plain_string,
     is_step_aligned,
     to_decimal,
+)
+from app.exchanges.exceptions import ExchangeAPIException
+from app.exchanges.utils import to_float
+from app.schemas.exchange_balance import (
+    ExchangeBalance,
+    ExchangeCoinBalance,
 )
 from app.schemas.exchange_instrument import ExchangeInstrumentRules
 from app.schemas.exchange_order import (
     ExchangeOrder,
     ExchangeOrderList,
 )
-
+from app.schemas.exchange_position import (
+    ExchangePosition,
+    ExchangePositionList,
+)
+from app.schemas.exchange_trade import (
+    ClosePositionResult,
+    ExchangeOrderActionResult,
+    ExchangeOrderExecution,
+    ExchangeOrderPlacement,
+)
 class BybitClient(BaseExchangeClient):
     def __init__(
         self,
@@ -143,6 +137,200 @@ class BybitClient(BaseExchangeClient):
         self._validate_bybit_payload(payload)
 
         return payload
+    async def close_position(
+        self,
+        symbol: str,
+        position_side: str,
+        quantity: float,
+        category: str = "linear",
+        position_index: int = 0,
+        time_in_force: str = "IOC",
+        client_order_id: str | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_category = category.lower()
+        normalized_position_side = position_side.upper()
+
+        if normalized_position_side not in {
+            "LONG",
+            "SHORT",
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "position_side must be LONG or SHORT"
+                ),
+            )
+
+        if position_index not in {0, 1, 2}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "position_index must be 0, 1 or 2"
+                ),
+            )
+
+        if (
+            normalized_position_side == "LONG"
+            and position_index == 2
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "A LONG position cannot use "
+                    "position_index 2"
+                ),
+            )
+
+        if (
+            normalized_position_side == "SHORT"
+            and position_index == 1
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "A SHORT position cannot use "
+                    "position_index 1"
+                ),
+            )
+
+        closing_side = (
+            "SELL"
+            if normalized_position_side == "LONG"
+            else "BUY"
+        )
+
+        bybit_side = (
+            "Sell"
+            if closing_side == "SELL"
+            else "Buy"
+        )
+
+        rules_data = await self.get_instrument_rules(
+            symbol=normalized_symbol,
+            category=normalized_category,
+        )
+
+        rules = ExchangeInstrumentRules.model_validate(
+    rules_data
+)
+
+        quantity_decimal = to_decimal(quantity)
+
+        self._validate_quantity_against_rules(
+            quantity=quantity_decimal,
+            rules=rules,
+            order_type="MARKET",
+        )
+
+        body = {
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+            "side": bybit_side,
+            "orderType": "Market",
+            "qty": decimal_to_plain_string(
+                quantity_decimal
+            ),
+            "timeInForce": time_in_force,
+            "reduceOnly": True,
+            "closeOnTrigger": False,
+            "positionIdx": position_index,
+        }
+
+        if client_order_id:
+            body["orderLinkId"] = client_order_id
+
+        if dry_run:
+            return ClosePositionResult(
+                exchange="BYBIT",
+                category=normalized_category,
+                order_id="",
+                client_order_id=client_order_id or "",
+                symbol=normalized_symbol,
+                position_side=normalized_position_side,
+                closing_side=closing_side,
+                position_index=position_index,
+                requested_quantity=quantity,
+                status="PENDING",
+                reduce_only=True,
+                dry_run=True,
+                accepted=False,
+                verified=False,
+                message=(
+                    "Dry run completed. "
+                    "No position close order was sent "
+                    "to Bybit."
+                ),
+            ).model_dump()
+
+        payload = await self._private_post(
+            endpoint="/v5/order/create",
+            body=body,
+        )
+
+        result = payload.get("result", {})
+        order_id = result.get("orderId", "")
+
+        verified_order = await self.get_order_by_id(
+            order_id=order_id,
+            category=normalized_category,
+            symbol=normalized_symbol,
+        )
+
+        if verified_order is not None:
+            return ClosePositionResult(
+                exchange="BYBIT",
+                category=normalized_category,
+                order_id=order_id,
+                client_order_id=result.get(
+                    "orderLinkId",
+                    client_order_id or "",
+                ),
+                symbol=normalized_symbol,
+                position_side=normalized_position_side,
+                closing_side=closing_side,
+                position_index=position_index,
+                requested_quantity=quantity,
+                status=verified_order.get(
+                    "status",
+                    "UNKNOWN",
+                ),
+                reduce_only=True,
+                dry_run=False,
+                accepted=True,
+                verified=True,
+                message=(
+                    "Position close order verified "
+                    "through Bybit."
+                ),
+            ).model_dump()
+
+        return ClosePositionResult(
+            exchange="BYBIT",
+            category=normalized_category,
+            order_id=order_id,
+            client_order_id=result.get(
+                "orderLinkId",
+                client_order_id or "",
+            ),
+            symbol=normalized_symbol,
+            position_side=normalized_position_side,
+            closing_side=closing_side,
+            position_index=position_index,
+            requested_quantity=quantity,
+            status="PENDING",
+            reduce_only=True,
+            dry_run=False,
+            accepted=True,
+            verified=False,
+            message=(
+                "Position close order accepted by Bybit, "
+                "but its status is not available yet."
+            ),
+        ).model_dump()
+    
+
     async def _private_post(
         self,
         endpoint: str,

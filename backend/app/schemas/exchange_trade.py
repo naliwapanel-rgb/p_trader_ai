@@ -17,6 +17,12 @@ NormalizedOrderStatus = Literal[
     "EXPIRED",
     "UNKNOWN",
 ]
+TradingSide = Literal["BUY", "SELL"]
+
+PositionSide = Literal[
+    "LONG",
+    "SHORT",
+]
 
 class MarketOrderRequest(BaseModel):
     symbol: str = Field(min_length=3, max_length=30)
@@ -224,5 +230,77 @@ class ExchangeOrderExecution(BaseModel):
 
     created_at_ms: int = 0
     updated_at_ms: int = 0
+
+    message: str
+    
+    
+class ClosePositionRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+
+    position_side: PositionSide
+
+    quantity: float = Field(gt=0)
+
+    category: TradingCategory = "linear"
+
+    position_index: int = Field(
+        default=0,
+        ge=0,
+        le=2,
+    )
+
+    time_in_force: TimeInForce = "IOC"
+
+    client_order_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=36,
+    )
+
+    @model_validator(mode="after")
+    def validate_close_position(self):
+        self.symbol = self.symbol.upper()
+
+        if (
+            self.position_side == "LONG"
+            and self.position_index == 2
+        ):
+            raise ValueError(
+                "A LONG position cannot use position_index 2"
+            )
+
+        if (
+            self.position_side == "SHORT"
+            and self.position_index == 1
+        ):
+            raise ValueError(
+                "A SHORT position cannot use position_index 1"
+            )
+
+        return self
+    
+class ClosePositionResult(BaseModel):
+    exchange: str
+    category: str
+
+    order_id: str = ""
+    client_order_id: str = ""
+
+    symbol: str
+    position_side: PositionSide
+    closing_side: TradingSide
+    position_index: int
+
+    requested_quantity: float
+
+    status: NormalizedOrderStatus = "PENDING"
+
+    reduce_only: bool = True
+    dry_run: bool
+    accepted: bool
+    verified: bool = False
 
     message: str
