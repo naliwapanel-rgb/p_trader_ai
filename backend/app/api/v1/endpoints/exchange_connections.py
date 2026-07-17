@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
 from app.database.session import get_db
 from app.exchanges.factory import ExchangeFactory
 from app.models.user import User
+from app.schemas.exchange_trade import CloseFullPositionRequest
 from app.services.exchange_account_service import ExchangeAccountService
 from app.utils.responses import success_response
 
@@ -78,6 +79,49 @@ async def get_exchange_positions(
         data=result,
     )
 
+@router.post("/{account_id}/positions/close-full")
+async def close_full_exchange_position(
+    account_id: int,
+    data: CloseFullPositionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+
+    client = ExchangeFactory.create_client(account)
+
+    close_full_method = getattr(
+        client,
+        "close_full_position",
+        None,
+    )
+
+    if close_full_method is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "Automatic full position close is not "
+                "supported for this exchange"
+            ),
+        )
+
+    result = await close_full_method(
+        symbol=data.symbol,
+        category=data.category,
+        settle_coin=data.settle_coin,
+        position_side=data.position_side,
+        time_in_force=data.time_in_force,
+        client_order_id=data.client_order_id,
+        dry_run=data.dry_run,
+    )
+
+    return success_response(
+        message="Full position close processed successfully",
+        data=result,
+    )
 
 @router.get("/{account_id}/orders/open")
 async def get_exchange_open_orders(

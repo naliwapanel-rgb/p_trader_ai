@@ -17,7 +17,6 @@ NormalizedOrderStatus = Literal[
     "EXPIRED",
     "UNKNOWN",
 ]
-TradingSide = Literal["BUY", "SELL"]
 
 PositionSide = Literal[
     "LONG",
@@ -280,6 +279,38 @@ class ClosePositionRequest(BaseModel):
                 "A SHORT position cannot use position_index 1"
             )
 
+        return self
+    
+class CloseFullPositionRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+
+    position_side: PositionSide | None = None
+
+    category: TradingCategory = "linear"
+
+    settle_coin: str = Field(
+        default="USDT",
+        min_length=2,
+        max_length=15,
+    )
+
+    time_in_force: TimeInForce = "IOC"
+
+    client_order_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=36,
+    )
+
+    dry_run: bool = True
+
+    @model_validator(mode="after")
+    def normalize_close_full_position(self):
+        self.symbol = self.symbol.upper()
+        self.settle_coin = self.settle_coin.upper()
         return self
     
 class ClosePositionResult(BaseModel):
