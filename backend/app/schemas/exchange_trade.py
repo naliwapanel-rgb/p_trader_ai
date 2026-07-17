@@ -313,6 +313,40 @@ class CloseFullPositionRequest(BaseModel):
         self.settle_coin = self.settle_coin.upper()
         return self
     
+class ClosePartialPositionRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+
+    quantity: float = Field(gt=0)
+
+    position_side: PositionSide | None = None
+
+    category: TradingCategory = "linear"
+
+    settle_coin: str = Field(
+        default="USDT",
+        min_length=2,
+        max_length=15,
+    )
+
+    time_in_force: TimeInForce = "IOC"
+
+    client_order_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=36,
+    )
+
+    dry_run: bool = True
+
+    @model_validator(mode="after")
+    def normalize_close_partial_position(self):
+        self.symbol = self.symbol.upper()
+        self.settle_coin = self.settle_coin.upper()
+        return self
+    
 class ClosePositionResult(BaseModel):
     exchange: str
     category: str
