@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 TradingSide = Literal["BUY", "SELL"]
@@ -423,6 +423,34 @@ class SetPositionTpSlRequest(BaseModel):
             raise ValueError(
                 "At least one of take_profit or stop_loss "
                 "must be provided"
+            )
+        return self
+class RemovePositionTpSlRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+    remove_take_profit: bool = False
+    remove_stop_loss: bool = False
+    position_side: PositionSide | None = None
+    category: TradingCategory = "linear"
+    settle_coin: str = Field(
+        default="USDT",
+        min_length=2,
+        max_length=15,
+    )
+    dry_run: bool = True
+    @model_validator(mode="after")
+    def validate_removal_selection(self):
+        self.symbol = self.symbol.upper()
+        self.settle_coin = self.settle_coin.upper()
+        if (
+            not self.remove_take_profit
+            and not self.remove_stop_loss
+        ):
+            raise ValueError(
+                "At least one of remove_take_profit or "
+                "remove_stop_loss must be true"
             )
         return self
 class PositionTpSlResult(BaseModel):

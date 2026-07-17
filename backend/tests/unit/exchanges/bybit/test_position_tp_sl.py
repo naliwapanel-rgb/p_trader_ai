@@ -416,4 +416,145 @@ async def test_sl_only_without_existing_tp_sends_only_sl():
     )
     assert result["take_profit"] is None
     assert result["stop_loss"] == 65000.0
+@pytest.mark.asyncio
+async def test_remove_take_profit_preserves_stop_loss():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value=long_position()
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.remove_position_tp_sl(
+        symbol="BTCUSDT",
+        remove_take_profit=True,
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "takeProfit": "0",
+            "stopLoss": "64000",
+            "slTriggerBy": "MarkPrice",
+        },
+    )
+    assert result["take_profit"] is None
+    assert result["stop_loss"] == 64000.0
+    assert result["accepted"] is True
+@pytest.mark.asyncio
+async def test_remove_stop_loss_preserves_take_profit():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value=long_position()
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.remove_position_tp_sl(
+        symbol="BTCUSDT",
+        remove_stop_loss=True,
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "takeProfit": "71000",
+            "tpTriggerBy": "MarkPrice",
+            "stopLoss": "0",
+        },
+    )
+    assert result["take_profit"] == 71000.0
+    assert result["stop_loss"] is None
+@pytest.mark.asyncio
+async def test_remove_both_take_profit_and_stop_loss():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value=long_position()
+    )
+    client._private_post = AsyncMock(
+        return_value={
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {},
+        }
+    )
+    result = await client.remove_position_tp_sl(
+        symbol="BTCUSDT",
+        remove_take_profit=True,
+        remove_stop_loss=True,
+        dry_run=False,
+    )
+    client._private_post.assert_awaited_once_with(
+        endpoint="/v5/position/trading-stop",
+        body={
+            "category": "linear",
+            "symbol": "BTCUSDT",
+            "tpslMode": "Full",
+            "positionIdx": 0,
+            "takeProfit": "0",
+            "stopLoss": "0",
+        },
+    )
+    assert result["take_profit"] is None
+    assert result["stop_loss"] is None
+@pytest.mark.asyncio
+async def test_remove_position_tp_sl_dry_run():
+    client = make_client()
+    client.get_positions = AsyncMock(
+        return_value=long_position()
+    )
+    client._private_post = AsyncMock()
+    result = await client.remove_position_tp_sl(
+        symbol="btcusdt",
+        remove_take_profit=True,
+        dry_run=True,
+    )
+    client._private_post.assert_not_awaited()
+    assert result["symbol"] == "BTCUSDT"
+    assert result["take_profit"] is None
+    assert result["stop_loss"] == 64000.0
+    assert result["dry_run"] is True
+    assert result["accepted"] is False
+@pytest.mark.asyncio
+async def test_remove_position_tp_sl_requires_selection():
+    client = make_client()
+    with pytest.raises(HTTPException) as exc_info:
+        await client.remove_position_tp_sl(
+            symbol="BTCUSDT",
+        )
+    assert exc_info.value.status_code == 400
+    assert (
+        "At least one of remove_take_profit"
+        in exc_info.value.detail
+    )
+@pytest.mark.asyncio
+async def test_set_tp_sl_rejects_value_and_removal_together():
+    client = make_client()
+    with pytest.raises(HTTPException) as exc_info:
+        await client.set_position_tp_sl(
+            symbol="BTCUSDT",
+            take_profit=72000,
+            remove_take_profit=True,
+        )
+    assert exc_info.value.status_code == 400
+    assert (
+        "cannot be used together"
+        in exc_info.value.detail
+    )
 

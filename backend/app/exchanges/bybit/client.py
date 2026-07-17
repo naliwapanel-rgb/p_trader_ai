@@ -794,6 +794,8 @@ class BybitClient(BaseExchangeClient):
         tp_trigger_by: str = "MarkPrice",
         sl_trigger_by: str = "MarkPrice",
         dry_run: bool = True,
+        remove_take_profit: bool = False,
+        remove_stop_loss: bool = False,
     ) -> dict:
         normalized_symbol = symbol.upper()
         normalized_category = category.lower()
@@ -810,12 +812,33 @@ class BybitClient(BaseExchangeClient):
                     "linear and inverse categories"
                 ),
             )
-        if take_profit is None and stop_loss is None:
+        if (
+            take_profit is None
+            and stop_loss is None
+            and not remove_take_profit
+            and not remove_stop_loss
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     "At least one of take_profit or stop_loss "
                     "must be provided"
+                ),
+            )
+        if take_profit is not None and remove_take_profit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "take_profit and remove_take_profit "
+                    "cannot be used together"
+                ),
+            )
+        if stop_loss is not None and remove_stop_loss:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "stop_loss and remove_stop_loss "
+                    "cannot be used together"
                 ),
             )
         take_profit_decimal = (
@@ -964,21 +987,29 @@ class BybitClient(BaseExchangeClient):
             position.get("stop_loss") or 0
         )
         effective_take_profit = (
-            take_profit_decimal
-            if take_profit_decimal is not None
+            None
+            if remove_take_profit
             else (
-                existing_take_profit
-                if existing_take_profit > 0
-                else None
+                take_profit_decimal
+                if take_profit_decimal is not None
+                else (
+                    existing_take_profit
+                    if existing_take_profit > 0
+                    else None
+                )
             )
         )
         effective_stop_loss = (
-            stop_loss_decimal
-            if stop_loss_decimal is not None
+            None
+            if remove_stop_loss
             else (
-                existing_stop_loss
-                if existing_stop_loss > 0
-                else None
+                stop_loss_decimal
+                if stop_loss_decimal is not None
+                else (
+                    existing_stop_loss
+                    if existing_stop_loss > 0
+                    else None
+                )
             )
         )
         body = {
@@ -987,12 +1018,16 @@ class BybitClient(BaseExchangeClient):
             "tpslMode": "Full",
             "positionIdx": position_index,
         }
-        if effective_take_profit is not None:
+        if remove_take_profit:
+            body["takeProfit"] = "0"
+        elif effective_take_profit is not None:
             body["takeProfit"] = decimal_to_plain_string(
                 effective_take_profit.normalize()
             )
             body["tpTriggerBy"] = normalized_tp_trigger
-        if effective_stop_loss is not None:
+        if remove_stop_loss:
+            body["stopLoss"] = "0"
+        elif effective_stop_loss is not None:
             body["stopLoss"] = decimal_to_plain_string(
                 effective_stop_loss.normalize()
             )
@@ -1042,6 +1077,34 @@ class BybitClient(BaseExchangeClient):
             "Position TP/SL update accepted by Bybit."
         )
         return result
+    async def remove_position_tp_sl(
+        self,
+        symbol: str,
+        remove_take_profit: bool = False,
+        remove_stop_loss: bool = False,
+        category: str = "linear",
+        settle_coin: str = "USDT",
+        position_side: str | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        if not remove_take_profit and not remove_stop_loss:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "At least one of remove_take_profit or "
+                    "remove_stop_loss must be true"
+                ),
+            )
+        return await self.set_position_tp_sl(
+            symbol=symbol,
+            category=category,
+            settle_coin=settle_coin,
+            position_side=position_side,
+            dry_run=dry_run,
+            remove_take_profit=remove_take_profit,
+            remove_stop_loss=remove_stop_loss,
+        )
+
     async def _private_post(
         self,
         endpoint: str,

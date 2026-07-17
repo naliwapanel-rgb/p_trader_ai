@@ -7,6 +7,7 @@ from app.exchanges.factory import ExchangeFactory
 from app.models.user import User
 from app.schemas.exchange_trade import (
     SetPositionTpSlRequest,
+    RemovePositionTpSlRequest,
     CloseFullPositionRequest,
     ClosePartialPositionRequest,
     ClosePercentagePositionRequest,
@@ -285,3 +286,47 @@ async def set_exchange_position_tp_sl(
         data=result,
     )
 
+
+@router.post(
+    "/{account_id}/positions/tp-sl/remove"
+)
+async def remove_exchange_position_tp_sl(
+    account_id: int,
+    data: RemovePositionTpSlRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+    client = ExchangeFactory.create_client(account)
+    remove_tp_sl_method = getattr(
+        client,
+        "remove_position_tp_sl",
+        None,
+    )
+    if remove_tp_sl_method is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "Position TP/SL removal is not "
+                "supported for this exchange"
+            ),
+        )
+    result = await remove_tp_sl_method(
+        symbol=data.symbol,
+        remove_take_profit=data.remove_take_profit,
+        remove_stop_loss=data.remove_stop_loss,
+        category=data.category,
+        settle_coin=data.settle_coin,
+        position_side=data.position_side,
+        dry_run=data.dry_run,
+    )
+    return success_response(
+        message=(
+            "Position TP/SL removal processed "
+            "successfully"
+        ),
+        data=result,
+    )
