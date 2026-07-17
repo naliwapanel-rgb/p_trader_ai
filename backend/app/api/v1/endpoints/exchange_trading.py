@@ -13,6 +13,7 @@ from app.schemas.exchange_trade import (
     CancelOrderRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    ClosePositionRequest,
 )
 from app.services.exchange_trading_service import ExchangeTradingService
 from app.utils.responses import success_response
