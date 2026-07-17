@@ -783,6 +783,241 @@ class BybitClient(BaseExchangeClient):
             client_order_id=client_order_id,
             dry_run=dry_run,
         )
+    async def set_position_tp_sl(
+        self,
+        symbol: str,
+        take_profit: float | None = None,
+        stop_loss: float | None = None,
+        category: str = "linear",
+        settle_coin: str = "USDT",
+        position_side: str | None = None,
+        tp_trigger_by: str = "MarkPrice",
+        sl_trigger_by: str = "MarkPrice",
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.upper()
+        normalized_category = category.lower()
+        normalized_settle_coin = settle_coin.upper()
+        supported_categories = {
+            "linear",
+            "inverse",
+        }
+        if normalized_category not in supported_categories:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Position TP/SL is supported only for "
+                    "linear and inverse categories"
+                ),
+            )
+        if take_profit is None and stop_loss is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "At least one of take_profit or stop_loss "
+                    "must be provided"
+                ),
+            )
+        take_profit_decimal = (
+            to_decimal(take_profit)
+            if take_profit is not None
+            else None
+        )
+        stop_loss_decimal = (
+            to_decimal(stop_loss)
+            if stop_loss is not None
+            else None
+        )
+        if (
+            take_profit_decimal is not None
+            and take_profit_decimal <= 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="take_profit must be greater than zero",
+            )
+        if (
+            stop_loss_decimal is not None
+            and stop_loss_decimal <= 0
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="stop_loss must be greater than zero",
+            )
+        normalized_position_side = (
+            position_side.upper()
+            if position_side
+            else None
+        )
+        if (
+            normalized_position_side is not None
+            and normalized_position_side
+            not in {"LONG", "SHORT"}
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "position_side must be LONG or SHORT "
+                    "when provided"
+                ),
+            )
+        supported_trigger_types = {
+            "MARKPRICE": "MarkPrice",
+            "LASTPRICE": "LastPrice",
+            "INDEXPRICE": "IndexPrice",
+        }
+        normalized_tp_trigger = supported_trigger_types.get(
+            tp_trigger_by.upper()
+        )
+        normalized_sl_trigger = supported_trigger_types.get(
+            sl_trigger_by.upper()
+        )
+        if normalized_tp_trigger is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "tp_trigger_by must be MarkPrice, "
+                    "LastPrice or IndexPrice"
+                ),
+            )
+        if normalized_sl_trigger is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "sl_trigger_by must be MarkPrice, "
+                    "LastPrice or IndexPrice"
+                ),
+            )
+        positions_response = await self.get_positions(
+            category=normalized_category,
+            settle_coin=normalized_settle_coin,
+        )
+        active_positions = [
+            position
+            for position in positions_response.get(
+                "positions",
+                [],
+            )
+            if (
+                str(
+                    position.get("symbol", "")
+                ).upper()
+                == normalized_symbol
+                and to_decimal(
+                    position.get("size") or 0
+                ) > 0
+            )
+        ]
+        if normalized_position_side is not None:
+            active_positions = [
+                position
+                for position in active_positions
+                if (
+                    str(
+                        position.get("side", "")
+                    ).upper()
+                    == normalized_position_side
+                )
+            ]
+        if not active_positions:
+            detail = (
+                f"No active position found for "
+                f"{normalized_symbol}"
+            )
+            if normalized_position_side:
+                detail += (
+                    f" with side "
+                    f"{normalized_position_side}"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail,
+            )
+        if len(active_positions) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Multiple active positions were found for "
+                    f"{normalized_symbol}. Provide position_side "
+                    "to select LONG or SHORT."
+                ),
+            )
+        position = active_positions[0]
+        detected_side = str(
+            position.get("side", "")
+        ).upper()
+        if detected_side not in {"LONG", "SHORT"}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "The active position has an unsupported "
+                    f"side: {detected_side or 'UNKNOWN'}"
+                ),
+            )
+        position_index = int(
+            position.get("position_index") or 0
+        )
+        body = {
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+            "tpslMode": "Full",
+            "positionIdx": position_index,
+        }
+        if take_profit_decimal is not None:
+            body["takeProfit"] = decimal_to_plain_string(
+                take_profit_decimal
+            )
+            body["tpTriggerBy"] = normalized_tp_trigger
+        if stop_loss_decimal is not None:
+            body["stopLoss"] = decimal_to_plain_string(
+                stop_loss_decimal
+            )
+            body["slTriggerBy"] = normalized_sl_trigger
+        result = {
+            "exchange": "BYBIT",
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+            "position_side": detected_side,
+            "position_index": position_index,
+            "take_profit": (
+                float(take_profit_decimal)
+                if take_profit_decimal is not None
+                else None
+            ),
+            "stop_loss": (
+                float(stop_loss_decimal)
+                if stop_loss_decimal is not None
+                else None
+            ),
+            "tp_trigger_by": (
+                normalized_tp_trigger
+                if take_profit_decimal is not None
+                else None
+            ),
+            "sl_trigger_by": (
+                normalized_sl_trigger
+                if stop_loss_decimal is not None
+                else None
+            ),
+            "dry_run": dry_run,
+            "accepted": False,
+            "message": (
+                "Dry run completed. No TP/SL update was "
+                "sent to Bybit."
+            ),
+        }
+        if dry_run:
+            return result
+        await self._private_post(
+            endpoint="/v5/position/trading-stop",
+            body=body,
+        )
+        result["dry_run"] = False
+        result["accepted"] = True
+        result["message"] = (
+            "Position TP/SL update accepted by Bybit."
+        )
+        return result
     async def _private_post(
         self,
         endpoint: str,

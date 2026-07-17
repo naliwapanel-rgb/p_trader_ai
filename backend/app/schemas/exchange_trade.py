@@ -381,3 +381,60 @@ class ClosePercentagePositionRequest(
         ),
     )
 
+class SetPositionTpSlRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+    take_profit: float | None = Field(
+        default=None,
+        gt=0,
+    )
+    stop_loss: float | None = Field(
+        default=None,
+        gt=0,
+    )
+    position_side: PositionSide | None = None
+    category: TradingCategory = "linear"
+    settle_coin: str = Field(
+        default="USDT",
+        min_length=2,
+        max_length=15,
+    )
+    tp_trigger_by: Literal[
+        "MarkPrice",
+        "LastPrice",
+        "IndexPrice",
+    ] = "MarkPrice"
+    sl_trigger_by: Literal[
+        "MarkPrice",
+        "LastPrice",
+        "IndexPrice",
+    ] = "MarkPrice"
+    dry_run: bool = True
+    @model_validator(mode="after")
+    def validate_position_tp_sl(self):
+        self.symbol = self.symbol.upper()
+        self.settle_coin = self.settle_coin.upper()
+        if (
+            self.take_profit is None
+            and self.stop_loss is None
+        ):
+            raise ValueError(
+                "At least one of take_profit or stop_loss "
+                "must be provided"
+            )
+        return self
+class PositionTpSlResult(BaseModel):
+    exchange: str
+    category: str
+    symbol: str
+    position_side: PositionSide
+    position_index: int
+    take_profit: float | None = None
+    stop_loss: float | None = None
+    tp_trigger_by: str | None = None
+    sl_trigger_by: str | None = None
+    dry_run: bool
+    accepted: bool
+    message: str

@@ -6,6 +6,7 @@ from app.database.session import get_db
 from app.exchanges.factory import ExchangeFactory
 from app.models.user import User
 from app.schemas.exchange_trade import (
+    SetPositionTpSlRequest,
     CloseFullPositionRequest,
     ClosePartialPositionRequest,
     ClosePercentagePositionRequest,
@@ -243,3 +244,44 @@ async def get_exchange_open_orders(
         message="Exchange open orders retrieved successfully",
         data=result,
     )
+@router.post("/{account_id}/positions/tp-sl")
+async def set_exchange_position_tp_sl(
+    account_id: int,
+    data: SetPositionTpSlRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+    client = ExchangeFactory.create_client(account)
+    set_tp_sl_method = getattr(
+        client,
+        "set_position_tp_sl",
+        None,
+    )
+    if set_tp_sl_method is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "Position TP/SL management is not "
+                "supported for this exchange"
+            ),
+        )
+    result = await set_tp_sl_method(
+        symbol=data.symbol,
+        take_profit=data.take_profit,
+        stop_loss=data.stop_loss,
+        category=data.category,
+        settle_coin=data.settle_coin,
+        position_side=data.position_side,
+        tp_trigger_by=data.tp_trigger_by,
+        sl_trigger_by=data.sl_trigger_by,
+        dry_run=data.dry_run,
+    )
+    return success_response(
+        message="Position TP/SL processed successfully",
+        data=result,
+    )
+
