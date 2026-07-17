@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, Field, model_validator
 
 
 TradingSide = Literal["BUY", "SELL"]
@@ -369,3 +369,15 @@ class ClosePositionResult(BaseModel):
     verified: bool = False
 
     message: str
+class ClosePercentagePositionRequest(
+    CloseFullPositionRequest
+):
+    percentage: float = Field(
+        ...,
+        gt=0,
+        le=100,
+        description=(
+            "Percentage of the active position to close"
+        ),
+    )
+
