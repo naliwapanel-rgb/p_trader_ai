@@ -1,4 +1,4 @@
-﻿from app.schemas.risk_management import (
+from app.schemas.risk_management import (
     PositionSizeResult,
     PreTradeRiskRequest,
     PreTradeRiskResult,
@@ -200,6 +200,64 @@ class RiskManagementService:
             message=message,
         )
 
+    def validate_daily_loss(
+        self,
+        daily_loss_percent: float,
+    ) -> RiskLimitCheck:
+        passed = (
+            daily_loss_percent >= 0
+            and daily_loss_percent
+            <= self._configuration.max_daily_loss_percent
+        )
+        if passed:
+            message = (
+                "Daily loss is within the configured "
+                "maximum"
+            )
+        else:
+            message = (
+                "Daily loss exceeds the configured "
+                "maximum daily loss"
+            )
+        return RiskLimitCheck(
+            rule="MAX_DAILY_LOSS",
+            passed=passed,
+            actual_value=daily_loss_percent,
+            limit_value=(
+                self._configuration
+                .max_daily_loss_percent
+            ),
+            message=message,
+        )
+    def validate_drawdown(
+        self,
+        drawdown_percent: float,
+    ) -> RiskLimitCheck:
+        passed = (
+            drawdown_percent >= 0
+            and drawdown_percent
+            <= self._configuration.max_drawdown_percent
+        )
+        if passed:
+            message = (
+                "Account drawdown is within the "
+                "configured maximum"
+            )
+        else:
+            message = (
+                "Account drawdown exceeds the configured "
+                "maximum drawdown"
+            )
+        return RiskLimitCheck(
+            rule="MAX_DRAWDOWN",
+            passed=passed,
+            actual_value=drawdown_percent,
+            limit_value=(
+                self._configuration
+                .max_drawdown_percent
+            ),
+            message=message,
+        )
     @staticmethod
     def validate_position_size(
         position_size: PositionSizeResult,
@@ -274,6 +332,12 @@ class RiskManagementService:
             self.validate_total_exposure(
                 projected_total_exposure_percent
             ),
+            self.validate_daily_loss(
+                data.current_daily_loss_percent
+            ),
+            self.validate_drawdown(
+                data.current_drawdown_percent
+            ),
             self.validate_risk_reward(
                 risk_reward_ratio
             ),
@@ -307,6 +371,40 @@ class RiskManagementService:
                 "10 percent of the configured maximum"
             )
 
+        if (
+            data.current_daily_loss_percent
+            >= (
+                self._configuration
+                .max_daily_loss_percent
+                * 0.9
+            )
+            and data.current_daily_loss_percent
+            <= (
+                self._configuration
+                .max_daily_loss_percent
+            )
+        ):
+            warnings.append(
+                "Daily loss is within 10 percent of the "
+                "configured maximum"
+            )
+        if (
+            data.current_drawdown_percent
+            >= (
+                self._configuration
+                .max_drawdown_percent
+                * 0.9
+            )
+            and data.current_drawdown_percent
+            <= (
+                self._configuration
+                .max_drawdown_percent
+            )
+        ):
+            warnings.append(
+                "Account drawdown is within 10 percent "
+                "of the configured maximum"
+            )
         accepted = not rejection_reasons
 
         if accepted:
@@ -329,6 +427,12 @@ class RiskManagementService:
             risk_reward_ratio=risk_reward_ratio,
             projected_total_exposure_percent=(
                 projected_total_exposure_percent
+            ),
+            current_daily_loss_percent=(
+                data.current_daily_loss_percent
+            ),
+            current_drawdown_percent=(
+                data.current_drawdown_percent
             ),
             checks=checks,
             rejection_reasons=rejection_reasons,

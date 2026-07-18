@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from pydantic import ValidationError
 from app.schemas.risk_management import (
     PositionSizeResult,
@@ -62,7 +62,7 @@ def test_accepts_valid_buy_trade():
     assert result.risk_reward_ratio == 2
     assert result.projected_total_exposure_percent == 40
     assert result.rejection_reasons == []
-    assert len(result.checks) == 7
+    assert len(result.checks) == 9
     assert "passed" in result.summary.lower()
 def test_accepts_valid_sell_trade():
     service = RiskManagementService()

@@ -1,4 +1,4 @@
-﻿from typing import Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 class RiskConfiguration(BaseModel):
@@ -164,6 +164,14 @@ class PreTradeRiskRequest(BaseModel):
         ge=0,
     )
 
+    current_daily_loss_percent: float = Field(
+        default=0,
+        ge=0,
+    )
+    current_drawdown_percent: float = Field(
+        default=0,
+        ge=0,
+    )
     entry_price: float = Field(gt=0)
     stop_loss_price: float = Field(gt=0)
     take_profit_price: float = Field(gt=0)
@@ -208,6 +216,8 @@ class PreTradeRiskResult(BaseModel):
 
     risk_reward_ratio: float
     projected_total_exposure_percent: float
+    current_daily_loss_percent: float
+    current_drawdown_percent: float
 
     checks: list[RiskLimitCheck]
 
