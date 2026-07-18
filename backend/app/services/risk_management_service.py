@@ -124,3 +124,131 @@ class RiskManagementService:
             checks=checks,
             rejection_reasons=rejection_reasons,
         )
+class PositionSizeCalculator:
+    @staticmethod
+    def calculate(
+        data,
+    ):
+        from decimal import Decimal
+        from app.exchanges.decimal_utils import (
+            round_down_to_step,
+            to_decimal,
+        )
+        from app.schemas.risk_management import (
+            PositionSizeResult,
+        )
+        equity = to_decimal(data.account_equity)
+        risk_percent = to_decimal(data.risk_percent)
+        entry_price = to_decimal(data.entry_price)
+        stop_loss_price = to_decimal(data.stop_loss_price)
+        quantity_step = to_decimal(data.quantity_step)
+        minimum_quantity = to_decimal(
+            data.minimum_quantity
+        )
+        maximum_quantity = to_decimal(
+            data.maximum_quantity
+        )
+        minimum_notional = to_decimal(
+            data.minimum_notional
+        )
+        leverage = to_decimal(data.leverage)
+        one_hundred = Decimal("100")
+        requested_risk_amount = (
+            equity * risk_percent / one_hundred
+        )
+        stop_distance = abs(
+            entry_price - stop_loss_price
+        )
+        raw_quantity = (
+            requested_risk_amount / stop_distance
+        )
+        capped_by_maximum_quantity = False
+        if raw_quantity > maximum_quantity:
+            raw_quantity = maximum_quantity
+            capped_by_maximum_quantity = True
+        rounded_quantity = round_down_to_step(
+            raw_quantity,
+            quantity_step,
+        )
+        position_notional = (
+            rounded_quantity * entry_price
+        )
+        required_margin = (
+            position_notional / leverage
+        )
+        actual_risk_amount = (
+            rounded_quantity * stop_distance
+        )
+        actual_risk_percent = (
+            actual_risk_amount
+            / equity
+            * one_hundred
+        )
+        rejection_reasons = []
+        if rounded_quantity <= 0:
+            rejection_reasons.append(
+                "Calculated quantity is zero after "
+                "quantity-step rounding"
+            )
+        if rounded_quantity < minimum_quantity:
+            rejection_reasons.append(
+                "Calculated quantity is below the "
+                "instrument minimum quantity"
+            )
+        if rounded_quantity > maximum_quantity:
+            rejection_reasons.append(
+                "Calculated quantity exceeds the "
+                "instrument maximum quantity"
+            )
+        if (
+            minimum_notional > 0
+            and position_notional < minimum_notional
+        ):
+            rejection_reasons.append(
+                "Calculated position notional is below "
+                "the instrument minimum notional"
+            )
+        return PositionSizeResult(
+            valid=not rejection_reasons,
+            account_equity=float(equity),
+            requested_risk_percent=float(
+                risk_percent
+            ),
+            requested_risk_amount=float(
+                requested_risk_amount
+            ),
+            entry_price=float(entry_price),
+            stop_loss_price=float(stop_loss_price),
+            stop_distance=float(stop_distance),
+            raw_quantity=float(raw_quantity),
+            rounded_quantity=float(
+                rounded_quantity
+            ),
+            position_notional=float(
+                position_notional
+            ),
+            required_margin=float(
+                required_margin
+            ),
+            actual_risk_amount=float(
+                actual_risk_amount
+            ),
+            actual_risk_percent=float(
+                actual_risk_percent
+            ),
+            quantity_step=float(quantity_step),
+            minimum_quantity=float(
+                minimum_quantity
+            ),
+            maximum_quantity=float(
+                maximum_quantity
+            ),
+            minimum_notional=float(
+                minimum_notional
+            ),
+            leverage=float(leverage),
+            capped_by_maximum_quantity=(
+                capped_by_maximum_quantity
+            ),
+            rejection_reasons=rejection_reasons,
+        )
