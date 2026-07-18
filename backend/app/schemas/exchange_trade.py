@@ -1,4 +1,4 @@
-from typing import Literal
+﻿from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -381,6 +381,44 @@ class ClosePercentagePositionRequest(
         ),
     )
 
+class SetPositionLeverageRequest(BaseModel):
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
+    buy_leverage: float = Field(
+        gt=0,
+        description=(
+            "Leverage applied to long positions"
+        ),
+    )
+    sell_leverage: float = Field(
+        gt=0,
+        description=(
+            "Leverage applied to short positions"
+        ),
+    )
+    category: Literal[
+        "linear",
+        "inverse",
+    ] = "linear"
+    dry_run: bool = True
+    @model_validator(mode="after")
+    def normalize_position_leverage(self):
+        self.symbol = self.symbol.strip().upper()
+        if not self.symbol:
+            raise ValueError("symbol is required")
+        return self
+class PositionLeverageUpdateResult(BaseModel):
+    exchange: str
+    category: str
+    symbol: str
+    buy_leverage: float
+    sell_leverage: float
+    dry_run: bool
+    accepted: bool
+    message: str
+
 class SetPositionTpSlRequest(BaseModel):
     symbol: str = Field(
         min_length=3,
@@ -466,3 +504,5 @@ class PositionTpSlResult(BaseModel):
     dry_run: bool
     accepted: bool
     message: str
+
+

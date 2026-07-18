@@ -214,6 +214,82 @@ class BybitClient(BaseExchangeClient):
             "positions": leverage_positions,
         }
 
+    async def set_position_leverage(
+        self,
+        symbol: str,
+        buy_leverage: float,
+        sell_leverage: float,
+        category: str = "linear",
+        dry_run: bool = True,
+    ) -> dict:
+        normalized_symbol = symbol.strip().upper()
+        normalized_category = category.strip().lower()
+        if not normalized_symbol:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="symbol is required",
+            )
+        if normalized_category not in {
+            "linear",
+            "inverse",
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Position leverage is supported only for "
+                    "linear and inverse categories"
+                ),
+            )
+        buy_leverage_decimal = to_decimal(buy_leverage)
+        sell_leverage_decimal = to_decimal(sell_leverage)
+        if buy_leverage_decimal <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="buy_leverage must be greater than zero",
+            )
+        if sell_leverage_decimal <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="sell_leverage must be greater than zero",
+            )
+        normalized_buy_leverage = decimal_to_plain_string(
+            buy_leverage_decimal.normalize()
+        )
+        normalized_sell_leverage = decimal_to_plain_string(
+            sell_leverage_decimal.normalize()
+        )
+        body = {
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+            "buyLeverage": normalized_buy_leverage,
+            "sellLeverage": normalized_sell_leverage,
+        }
+        result = {
+            "exchange": "BYBIT",
+            "category": normalized_category,
+            "symbol": normalized_symbol,
+            "buy_leverage": float(buy_leverage_decimal),
+            "sell_leverage": float(sell_leverage_decimal),
+            "dry_run": dry_run,
+            "accepted": False,
+            "message": (
+                "Dry run completed. No leverage update was "
+                "sent to Bybit."
+            ),
+        }
+        if dry_run:
+            return result
+        await self._private_post(
+            endpoint="/v5/position/set-leverage",
+            body=body,
+        )
+        result["dry_run"] = False
+        result["accepted"] = True
+        result["message"] = (
+            "Position leverage update accepted by Bybit."
+        )
+        return result
+
     async def close_position(
         self,
         symbol: str,
@@ -2490,4 +2566,6 @@ class BybitClient(BaseExchangeClient):
             accepted=True,
             message="Amendment request accepted by Bybit.",
         ).model_dump()
+
+
 

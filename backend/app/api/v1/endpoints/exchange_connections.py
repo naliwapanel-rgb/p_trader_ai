@@ -6,6 +6,7 @@ from app.database.session import get_db
 from app.exchanges.factory import ExchangeFactory
 from app.models.user import User
 from app.schemas.exchange_trade import (
+    SetPositionLeverageRequest,
     SetPositionTpSlRequest,
     RemovePositionTpSlRequest,
     CloseFullPositionRequest,
@@ -280,6 +281,46 @@ async def get_exchange_open_orders(
         message="Exchange open orders retrieved successfully",
         data=result,
     )
+@router.post("/{account_id}/positions/leverage")
+async def set_exchange_position_leverage(
+    account_id: int,
+    data: SetPositionLeverageRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+    client = ExchangeFactory.create_client(account)
+    set_leverage_method = getattr(
+        client,
+        "set_position_leverage",
+        None,
+    )
+    if set_leverage_method is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "Position leverage management is not "
+                "supported for this exchange"
+            ),
+        )
+    result = await set_leverage_method(
+        symbol=data.symbol,
+        buy_leverage=data.buy_leverage,
+        sell_leverage=data.sell_leverage,
+        category=data.category,
+        dry_run=data.dry_run,
+    )
+    return success_response(
+        message=(
+            "Position leverage update processed "
+            "successfully"
+        ),
+        data=result,
+    )
+
 @router.post("/{account_id}/positions/tp-sl")
 async def set_exchange_position_tp_sl(
     account_id: int,
@@ -365,5 +406,8 @@ async def remove_exchange_position_tp_sl(
         ),
         data=result,
     )
+
+
+
 
 
