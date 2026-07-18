@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -82,6 +82,41 @@ async def get_exchange_positions(
 
     return success_response(
         message="Exchange positions retrieved successfully",
+        data=result,
+    )
+
+@router.get("/{account_id}/positions/{symbol}/leverage")
+async def get_exchange_position_leverage(
+    account_id: int,
+    symbol: str,
+    category: str = "linear",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = ExchangeAccountService(db).get_account(
+        current_user=current_user,
+        account_id=account_id,
+    )
+    client = ExchangeFactory.create_client(account)
+    leverage_method = getattr(
+        client,
+        "get_position_leverage",
+        None,
+    )
+    if leverage_method is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "Position leverage retrieval is not "
+                "supported for this exchange"
+            ),
+        )
+    result = await leverage_method(
+        symbol=symbol,
+        category=category,
+    )
+    return success_response(
+        message="Position leverage retrieved successfully",
         data=result,
     )
 
@@ -330,3 +365,5 @@ async def remove_exchange_position_tp_sl(
         ),
         data=result,
     )
+
+

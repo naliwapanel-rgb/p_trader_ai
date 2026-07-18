@@ -1,4 +1,4 @@
-import json
+﻿import json
 from decimal import Decimal
 from urllib.parse import urlencode
 
@@ -138,6 +138,82 @@ class BybitClient(BaseExchangeClient):
         self._validate_bybit_payload(payload)
 
         return payload
+    async def get_position_leverage(
+        self,
+        symbol: str,
+        category: str = "linear",
+    ) -> dict:
+        normalized_symbol = symbol.strip().upper()
+        normalized_category = category.strip().lower()
+        if not normalized_symbol:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="symbol is required",
+            )
+        if normalized_category not in {"linear", "inverse"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="category must be linear or inverse",
+            )
+        payload = await self._private_get(
+            endpoint="/v5/position/list",
+            params={
+                "category": normalized_category,
+                "symbol": normalized_symbol,
+            },
+        )
+        position_list = payload.get("result", {}).get("list", [])
+        leverage_positions: list[dict] = []
+        for position in position_list:
+            if (
+                str(position.get("symbol") or "").upper()
+                != normalized_symbol
+            ):
+                continue
+            raw_side = str(position.get("side") or "").upper()
+            if raw_side == "BUY":
+                position_side = "LONG"
+            elif raw_side == "SELL":
+                position_side = "SHORT"
+            else:
+                position_side = None
+            raw_leverage = position.get("leverage")
+            leverage = (
+                float(raw_leverage)
+                if raw_leverage not in {None, ""}
+                else None
+            )
+            position_index = int(
+                position.get("positionIdx") or 0
+            )
+            leverage_positions.append(
+                {
+                    "symbol": normalized_symbol,
+                    "category": normalized_category,
+                    "position_side": position_side,
+                    "position_index": position_index,
+                    "position_mode": (
+                        "ONE_WAY"
+                        if position_index == 0
+                        else "HEDGE"
+                    ),
+                    "leverage": leverage,
+                    "portfolio_margin": leverage is None,
+                    "trade_mode": int(
+                        position.get("tradeMode") or 0
+                    ),
+                    "position_size": float(
+                        position.get("size") or 0
+                    ),
+                }
+            )
+        return {
+            "exchange": "BYBIT",
+            "symbol": normalized_symbol,
+            "category": normalized_category,
+            "positions": leverage_positions,
+        }
+
     async def close_position(
         self,
         symbol: str,
@@ -2414,3 +2490,4 @@ class BybitClient(BaseExchangeClient):
             accepted=True,
             message="Amendment request accepted by Bybit.",
         ).model_dump()
+
