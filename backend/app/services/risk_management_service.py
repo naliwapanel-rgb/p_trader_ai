@@ -1,4 +1,7 @@
 ﻿from app.schemas.risk_management import (
+    PositionSizeResult,
+    PreTradeRiskRequest,
+    PreTradeRiskResult,
     RiskConfiguration,
     RiskConfigurationUpdate,
     RiskLimitCheck,
@@ -109,6 +112,228 @@ class RiskManagementService:
                 .minimum_risk_reward_ratio
             ),
             message=message,
+        )
+    def validate_trading_enabled(
+        self,
+    ) -> RiskLimitCheck:
+        passed = self._configuration.trading_enabled
+
+        if passed:
+            message = "Trading is enabled"
+        else:
+            message = (
+                "Trading is disabled by the risk "
+                "configuration"
+            )
+
+        return RiskLimitCheck(
+            rule="TRADING_ENABLED",
+            passed=passed,
+            actual_value=passed,
+            limit_value=True,
+            message=message,
+        )
+
+    def validate_risk_per_trade(
+        self,
+        actual_risk_percent: float,
+    ) -> RiskLimitCheck:
+        passed = (
+            actual_risk_percent > 0
+            and actual_risk_percent
+            <= self._configuration
+            .max_risk_per_trade_percent
+        )
+
+        if passed:
+            message = (
+                "Trade risk is within the configured "
+                "maximum"
+            )
+        else:
+            message = (
+                "Trade risk exceeds the configured "
+                "maximum risk per trade"
+            )
+
+        return RiskLimitCheck(
+            rule="MAX_RISK_PER_TRADE",
+            passed=passed,
+            actual_value=actual_risk_percent,
+            limit_value=(
+                self._configuration
+                .max_risk_per_trade_percent
+            ),
+            message=message,
+        )
+
+    def validate_total_exposure(
+        self,
+        projected_exposure_percent: float,
+    ) -> RiskLimitCheck:
+        passed = (
+            projected_exposure_percent >= 0
+            and projected_exposure_percent
+            <= self._configuration
+            .max_total_exposure_percent
+        )
+
+        if passed:
+            message = (
+                "Projected total exposure is within "
+                "the configured limit"
+            )
+        else:
+            message = (
+                "Projected total exposure exceeds the "
+                "configured maximum"
+            )
+
+        return RiskLimitCheck(
+            rule="MAX_TOTAL_EXPOSURE",
+            passed=passed,
+            actual_value=projected_exposure_percent,
+            limit_value=(
+                self._configuration
+                .max_total_exposure_percent
+            ),
+            message=message,
+        )
+
+    @staticmethod
+    def validate_position_size(
+        position_size: PositionSizeResult,
+    ) -> RiskLimitCheck:
+        if position_size.valid:
+            message = (
+                "Position size passed instrument "
+                "validation"
+            )
+        else:
+            reasons = "; ".join(
+                position_size.rejection_reasons
+            )
+
+            message = (
+                "Position size validation failed"
+            )
+
+            if reasons:
+                message = f"{message}: {reasons}"
+
+        return RiskLimitCheck(
+            rule="POSITION_SIZE_VALID",
+            passed=position_size.valid,
+            actual_value=position_size.rounded_quantity,
+            limit_value=None,
+            message=message,
+        )
+    def validate_pre_trade(
+        self,
+        data: PreTradeRiskRequest,
+    ) -> PreTradeRiskResult:
+        position_exposure_percent = (
+            data.position_size.position_notional
+            / data.account_equity
+            * 100
+        )
+
+        projected_total_exposure_percent = (
+            data.current_total_exposure_percent
+            + position_exposure_percent
+        )
+
+        risk_distance = abs(
+            data.entry_price
+            - data.stop_loss_price
+        )
+
+        reward_distance = abs(
+            data.take_profit_price
+            - data.entry_price
+        )
+
+        risk_reward_ratio = (
+            reward_distance / risk_distance
+        )
+
+        checks = [
+            self.validate_trading_enabled(),
+            self.validate_position_size(
+                data.position_size
+            ),
+            self.validate_risk_per_trade(
+                data.position_size.actual_risk_percent
+            ),
+            self.validate_leverage(
+                data.requested_leverage
+            ),
+            self.validate_open_positions(
+                data.current_open_positions
+            ),
+            self.validate_total_exposure(
+                projected_total_exposure_percent
+            ),
+            self.validate_risk_reward(
+                risk_reward_ratio
+            ),
+        ]
+
+        rejection_reasons = [
+            check.message
+            for check in checks
+            if not check.passed
+        ]
+
+        warnings = []
+
+        if data.position_size.capped_by_maximum_quantity:
+            warnings.append(
+                "Position quantity was capped by the "
+                "instrument maximum quantity"
+            )
+
+        if (
+            projected_total_exposure_percent
+            >= self._configuration
+            .max_total_exposure_percent
+            * 0.9
+            and projected_total_exposure_percent
+            <= self._configuration
+            .max_total_exposure_percent
+        ):
+            warnings.append(
+                "Projected total exposure is within "
+                "10 percent of the configured maximum"
+            )
+
+        accepted = not rejection_reasons
+
+        if accepted:
+            summary = (
+                "Trade passed all configured pre-trade "
+                "risk checks"
+            )
+        else:
+            summary = (
+                f"Trade rejected by "
+                f"{len(rejection_reasons)} risk check"
+            )
+
+            if len(rejection_reasons) != 1:
+                summary += "s"
+
+        return PreTradeRiskResult(
+            accepted=accepted,
+            side=data.side,
+            risk_reward_ratio=risk_reward_ratio,
+            projected_total_exposure_percent=(
+                projected_total_exposure_percent
+            ),
+            checks=checks,
+            rejection_reasons=rejection_reasons,
+            warnings=warnings,
+            summary=summary,
         )
     def build_validation_result(
         self,

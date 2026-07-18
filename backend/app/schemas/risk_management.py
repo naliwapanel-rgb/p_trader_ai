@@ -1,4 +1,6 @@
-﻿from pydantic import BaseModel, Field, model_validator
+﻿from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 class RiskConfiguration(BaseModel):
     max_risk_per_trade_percent: float = Field(
         default=1.0,
@@ -147,4 +149,73 @@ class PositionSizeResult(BaseModel):
     minimum_notional: float
     leverage: float
     capped_by_maximum_quantity: bool = False
-    rejection_reasons: list[str] = []
+    rejection_reasons: list[str] = Field(
+    default_factory=list
+)
+    
+class PreTradeRiskRequest(BaseModel):
+    side: Literal["BUY", "SELL"]
+
+    account_equity: float = Field(gt=0)
+    requested_leverage: float = Field(gt=0)
+
+    current_open_positions: int = Field(ge=0)
+    current_total_exposure_percent: float = Field(
+        ge=0,
+    )
+
+    entry_price: float = Field(gt=0)
+    stop_loss_price: float = Field(gt=0)
+    take_profit_price: float = Field(gt=0)
+
+    position_size: PositionSizeResult
+
+    @model_validator(mode="after")
+    def validate_trade_prices(self):
+        if self.side == "BUY":
+            if self.stop_loss_price >= self.entry_price:
+                raise ValueError(
+                    "BUY stop_loss_price must be below "
+                    "entry_price"
+                )
+
+            if self.take_profit_price <= self.entry_price:
+                raise ValueError(
+                    "BUY take_profit_price must be above "
+                    "entry_price"
+                )
+
+        if self.side == "SELL":
+            if self.stop_loss_price <= self.entry_price:
+                raise ValueError(
+                    "SELL stop_loss_price must be above "
+                    "entry_price"
+                )
+
+            if self.take_profit_price >= self.entry_price:
+                raise ValueError(
+                    "SELL take_profit_price must be below "
+                    "entry_price"
+                )
+
+        return self
+
+
+class PreTradeRiskResult(BaseModel):
+    accepted: bool
+
+    side: Literal["BUY", "SELL"]
+
+    risk_reward_ratio: float
+    projected_total_exposure_percent: float
+
+    checks: list[RiskLimitCheck]
+
+    rejection_reasons: list[str] = Field(
+        default_factory=list
+    )
+    warnings: list[str] = Field(
+        default_factory=list
+    )
+
+    summary: str
