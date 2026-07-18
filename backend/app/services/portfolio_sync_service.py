@@ -450,3 +450,78 @@ class PortfolioSyncService:
             ),
             source_errors=source_errors,
         )
+    def get_latest_snapshot(
+        self,
+        current_user: User,
+        portfolio_id: int,
+        exchange_account_id: int | None = None,
+    ):
+        self.portfolio_service.get_portfolio(
+            current_user=current_user,
+            portfolio_id=portfolio_id,
+        )
+        if exchange_account_id is not None:
+            self.exchange_account_service.get_account(
+                current_user=current_user,
+                account_id=exchange_account_id,
+            )
+        snapshot = self.sync_repository.get_latest(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            exchange_account_id=(
+                exchange_account_id
+            ),
+        )
+        if snapshot is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    "Portfolio synchronization "
+                    "snapshot not found"
+                ),
+            )
+        return snapshot
+    def list_snapshots(
+        self,
+        current_user: User,
+        portfolio_id: int,
+        limit: int = 50,
+    ):
+        self.portfolio_service.get_portfolio(
+            current_user=current_user,
+            portfolio_id=portfolio_id,
+        )
+        return self.sync_repository.list_by_portfolio(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            limit=limit,
+        )
+    def get_snapshot(
+        self,
+        current_user: User,
+        portfolio_id: int,
+        snapshot_id: int,
+    ):
+        self.portfolio_service.get_portfolio(
+            current_user=current_user,
+            portfolio_id=portfolio_id,
+        )
+        snapshot = (
+            self.sync_repository.get_by_id_and_user(
+                snapshot_id=snapshot_id,
+                user_id=current_user.id,
+            )
+        )
+        if (
+            snapshot is None
+            or snapshot.portfolio_id
+            != portfolio_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    "Portfolio synchronization "
+                    "snapshot not found"
+                ),
+            )
+        return snapshot
