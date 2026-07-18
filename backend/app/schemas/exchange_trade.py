@@ -1,12 +1,20 @@
 ﻿from typing import Literal
-
 from pydantic import BaseModel, Field, model_validator
-
-
+from app.schemas.order_risk import OrderRiskContext
 TradingSide = Literal["BUY", "SELL"]
 TradingCategory = Literal["spot", "linear", "inverse"]
-OrderCategory = Literal["spot", "linear", "inverse", "option"]
-TimeInForce = Literal["GTC", "IOC", "FOK", "PostOnly"]
+OrderCategory = Literal[
+    "spot",
+    "linear",
+    "inverse",
+    "option",
+]
+TimeInForce = Literal[
+    "GTC",
+    "IOC",
+    "FOK",
+    "PostOnly",
+]
 NormalizedOrderStatus = Literal[
     "PENDING",
     "NEW",
@@ -17,59 +25,65 @@ NormalizedOrderStatus = Literal[
     "EXPIRED",
     "UNKNOWN",
 ]
-
 PositionSide = Literal[
     "LONG",
     "SHORT",
 ]
-
 class MarketOrderRequest(BaseModel):
-    symbol: str = Field(min_length=3, max_length=30)
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
     side: TradingSide
     quantity: float = Field(gt=0)
-
     category: TradingCategory = "linear"
     time_in_force: TimeInForce = "IOC"
-
     reduce_only: bool = False
     close_on_trigger: bool = False
-
     client_order_id: str | None = Field(
         default=None,
         min_length=1,
         max_length=36,
     )
-
+    risk_context: OrderRiskContext | None = None
     @model_validator(mode="after")
     def normalize_values(self):
         self.symbol = self.symbol.upper()
+        if (
+            not self.reduce_only
+            and self.risk_context is not None
+            and (
+                self.risk_context
+                .estimated_entry_price is None
+            )
+        ):
+            raise ValueError(
+                "estimated_entry_price is required "
+                "for market-order risk validation"
+            )
         return self
-
-
 class LimitOrderRequest(BaseModel):
-    symbol: str = Field(min_length=3, max_length=30)
+    symbol: str = Field(
+        min_length=3,
+        max_length=30,
+    )
     side: TradingSide
-
     quantity: float = Field(gt=0)
     price: float = Field(gt=0)
-
     category: TradingCategory = "linear"
     time_in_force: TimeInForce = "GTC"
-
     reduce_only: bool = False
     close_on_trigger: bool = False
-
     client_order_id: str | None = Field(
         default=None,
         min_length=1,
         max_length=36,
     )
-
+    risk_context: OrderRiskContext | None = None
     @model_validator(mode="after")
     def normalize_values(self):
         self.symbol = self.symbol.upper()
         return self
-
 
 class ExchangeOrderPlacement(BaseModel):
     exchange: str
@@ -504,5 +518,3 @@ class PositionTpSlResult(BaseModel):
     dry_run: bool
     accepted: bool
     message: str
-
-

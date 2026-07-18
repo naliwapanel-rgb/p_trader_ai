@@ -6,6 +6,10 @@ from app.schemas.risk_management import (
     PreTradeRiskRequest,
     RiskConfigurationUpdate,
 )
+from app.services.risk_management_registry import (
+    _risk_management_services,
+    get_user_risk_management_service,
+)
 from app.services.risk_management_service import (
     PositionSizeCalculator,
     RiskManagementService,
@@ -15,22 +19,12 @@ router = APIRouter(
     prefix="/risk-management",
     tags=["Risk Management"],
 )
-_risk_management_services: dict[
-    int,
-    RiskManagementService,
-] = {}
 def get_risk_management_service(
     current_user: User = Depends(get_current_user),
 ) -> RiskManagementService:
-    service = _risk_management_services.get(
+    return get_user_risk_management_service(
         current_user.id
     )
-    if service is None:
-        service = RiskManagementService()
-        _risk_management_services[current_user.id] = (
-            service
-        )
-    return service
 @router.get("/configuration")
 async def get_risk_configuration(
     service: RiskManagementService = Depends(
@@ -52,9 +46,7 @@ async def update_risk_configuration(
         get_risk_management_service
     ),
 ):
-    configuration = service.update_configuration(
-        data
-    )
+    configuration = service.update_configuration(data)
     return success_response(
         message=(
             "Risk configuration updated "
@@ -84,13 +76,13 @@ async def calculate_position_size(
     ),
 ):
     configuration = service.get_configuration()
-    effective_risk_percent = min(
-        data.risk_percent,
-        configuration.max_risk_per_trade_percent,
-    )
     effective_request = data.model_copy(
         update={
-            "risk_percent": effective_risk_percent,
+            "risk_percent": min(
+                data.risk_percent,
+                configuration
+                .max_risk_per_trade_percent,
+            ),
             "leverage": min(
                 data.leverage,
                 configuration.max_leverage,
