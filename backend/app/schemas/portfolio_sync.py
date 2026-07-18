@@ -6,6 +6,18 @@ PortfolioSyncStatus = Literal[
     "PARTIAL",
     "FAILED",
 ]
+class PortfolioSyncRequest(BaseModel):
+    exchange_account_id: int = Field(gt=0)
+    category: Literal[
+        "linear",
+        "inverse",
+        "option",
+    ] = "linear"
+    settle_coin: str = Field(
+        default="USDT",
+        min_length=2,
+        max_length=20,
+    )
 class PortfolioSyncSnapshotCreate(BaseModel):
     user_id: int = Field(gt=0)
     portfolio_id: int = Field(gt=0)
@@ -75,3 +87,11 @@ class PortfolioSyncSnapshotResponse(
     model_config = {
         "from_attributes": True,
     }
+class PortfolioSyncExecutionResult(BaseModel):
+    snapshot: PortfolioSyncSnapshotResponse
+    created: bool
+    portfolio_total_value: float
+    portfolio_profit_loss: float
+    source_errors: dict[str, str] = Field(
+        default_factory=dict
+    )
