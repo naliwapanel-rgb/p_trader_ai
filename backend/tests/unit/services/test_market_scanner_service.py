@@ -218,3 +218,32 @@ def test_scan_request_rejects_bad_ranges():
             minimum_change_percent_24h=10,
             maximum_change_percent_24h=-10,
         )
+@pytest.mark.asyncio
+async def test_get_tickers_returns_validated_batch():
+    service, client, client_factory = (
+        build_service(
+            [
+                build_ticker(
+                    "BTCUSDT",
+                    last_price=60000,
+                    turnover=5000,
+                    volume=100,
+                    change_percent=2,
+                )
+            ]
+        )
+    )
+    result = await service.get_tickers(
+        category="spot",
+        is_testnet=True,
+    )
+    assert result.exchange == "BYBIT"
+    assert result.category == "spot"
+    assert result.count == 1
+    assert result.tickers[0].symbol == "BTCUSDT"
+    client_factory.assert_called_once_with(
+        True
+    )
+    client.get_tickers.assert_awaited_once_with(
+        category="spot"
+    )

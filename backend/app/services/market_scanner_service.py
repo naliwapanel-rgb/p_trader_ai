@@ -111,18 +111,28 @@ class MarketScannerService:
         ):
             return False
         return True
+    async def get_tickers(
+        self,
+        *,
+        category: str = "spot",
+        is_testnet: bool = False,
+    ) -> MarketTickerBatch:
+        client = self.client_factory(
+            is_testnet
+        )
+        raw_batch = await client.get_tickers(
+            category=category
+        )
+        return MarketTickerBatch.model_validate(
+            raw_batch
+        )
     async def scan(
         self,
         data: MarketScanRequest,
     ) -> MarketScanResult:
-        client = self.client_factory(
-            data.is_testnet
-        )
-        raw_batch = await client.get_tickers(
-            category=data.category
-        )
-        batch = MarketTickerBatch.model_validate(
-            raw_batch
+        batch = await self.get_tickers(
+            category=data.category,
+            is_testnet=data.is_testnet,
         )
         allowed_symbols = set(data.symbols)
         matched = [

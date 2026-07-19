@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     exchange_connections,
     exchange_trading,
     health,
+    market_scanner,
     notification_preferences,
     portfolios,
     risk_management,
@@ -28,3 +29,4 @@ api_router.include_router(
 )
 api_router.include_router(exchange_trading.router)
 api_router.include_router(risk_management.router)
+api_router.include_router(market_scanner.router)
