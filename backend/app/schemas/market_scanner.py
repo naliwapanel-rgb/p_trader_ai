@@ -158,3 +158,45 @@ class MarketScanResult(BaseModel):
     tickers: list[MarketTickerSnapshot] = Field(
         default_factory=list
     )
+StreamMessageType = Literal[
+    "snapshot",
+    "delta",
+]
+class MarketTickerStreamSubscription(BaseModel):
+    category: MarketCategory = "spot"
+    is_testnet: bool = False
+    symbols: list[str] = Field(
+        min_length=1,
+        max_length=100,
+    )
+    max_messages: int | None = Field(
+        default=None,
+        ge=1,
+        le=10000,
+    )
+    @field_validator("symbols")
+    @classmethod
+    def normalize_stream_symbols(
+        cls,
+        values: list[str],
+    ) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            symbol = value.strip().upper()
+            if not symbol:
+                raise ValueError(
+                    "symbols cannot contain blank values"
+                )
+            if symbol not in normalized:
+                normalized.append(symbol)
+        return normalized
+class MarketTickerStreamEvent(BaseModel):
+    exchange: str = "BYBIT"
+    category: MarketCategory
+    topic: str
+    message_type: StreamMessageType
+    symbol: str
+    sequence: int = 0
+    exchange_timestamp_ms: int = 0
+    received_at_ms: int = 0
+    ticker: MarketTickerSnapshot
