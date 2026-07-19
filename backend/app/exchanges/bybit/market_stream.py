@@ -255,6 +255,7 @@ class BybitTickerStreamClient:
         try:
             async with self.connect_factory(
                 url,
+                proxy=None,
                 open_timeout=15,
                 ping_interval=None,
                 close_timeout=5,

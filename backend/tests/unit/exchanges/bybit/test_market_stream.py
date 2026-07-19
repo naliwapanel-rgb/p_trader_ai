@@ -119,6 +119,13 @@ async def test_spot_subscriptions_are_batched_by_ten():
     assert len(requests[0]["args"]) == 10
     assert len(requests[1]["args"]) == 1
     assert requests[0]["op"] == "subscribe"
+    assert len(connect_factory.calls) == 1
+    url, kwargs = connect_factory.calls[0]
+    assert url == (
+        "wss://stream.bybit.com/"
+        "v5/public/spot"
+    )
+    assert kwargs["proxy"] is None
 @pytest.mark.asyncio
 async def test_stream_yields_normalized_snapshot():
     websocket = FakeWebSocket(
