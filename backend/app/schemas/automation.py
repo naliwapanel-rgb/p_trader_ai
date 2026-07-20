@@ -4,6 +4,7 @@ from pydantic import (
     BaseModel,
     Field,
     field_validator,
+    model_validator,
 )
 AutomationJobStatus = Literal[
     "QUEUED",
@@ -12,6 +13,118 @@ AutomationJobStatus = Literal[
     "FAILED",
     "CANCELLED",
 ]
+AutomationBackoffStrategy = Literal[
+    "FIXED",
+    "EXPONENTIAL",
+]
+class AutomationRetryPolicy(BaseModel):
+    max_attempts: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+    )
+    initial_delay_seconds: float = Field(
+        default=0.0,
+        ge=0,
+        le=3600,
+    )
+    backoff_strategy: (
+        AutomationBackoffStrategy
+    ) = "EXPONENTIAL"
+    backoff_multiplier: float = Field(
+        default=2.0,
+        ge=1,
+        le=10,
+    )
+    maximum_delay_seconds: float = Field(
+        default=60.0,
+        ge=0,
+        le=3600,
+    )
+    retryable_error_names: list[str] = Field(
+        default_factory=lambda: [
+            "TimeoutError",
+            "ConnectionError",
+            "OSError",
+        ],
+        max_length=50,
+    )
+    retryable_http_status_codes: list[int] = (
+        Field(
+            default_factory=lambda: [
+                408,
+                425,
+                429,
+                500,
+                502,
+                503,
+                504,
+            ],
+            max_length=50,
+        )
+    )
+    retry_on_unknown_errors: bool = False
+    @field_validator(
+        "retryable_error_names"
+    )
+    @classmethod
+    def normalize_error_names(
+        cls,
+        values: list[str],
+    ) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            name = value.strip()
+            if not name:
+                raise ValueError(
+                    "retryable error names "
+                    "cannot be blank"
+                )
+            if name not in normalized:
+                normalized.append(name)
+        return normalized
+    @field_validator(
+        "retryable_http_status_codes"
+    )
+    @classmethod
+    def validate_http_status_codes(
+        cls,
+        values: list[int],
+    ) -> list[int]:
+        normalized: list[int] = []
+        for value in values:
+            if value < 100 or value > 599:
+                raise ValueError(
+                    "retryable HTTP status codes "
+                    "must be between 100 and 599"
+                )
+            if value not in normalized:
+                normalized.append(value)
+        return normalized
+    @model_validator(mode="after")
+    def validate_delay_range(self):
+        if (
+            self.maximum_delay_seconds
+            < self.initial_delay_seconds
+        ):
+            raise ValueError(
+                "maximum_delay_seconds cannot "
+                "be below initial_delay_seconds"
+            )
+        return self
+class AutomationRetryDecision(BaseModel):
+    retry: bool
+    attempt_number: int = Field(
+        ge=1,
+    )
+    max_attempts: int = Field(
+        ge=1,
+    )
+    delay_seconds: float = Field(
+        default=0.0,
+        ge=0,
+    )
+    reason: str
 class AutomationJobSubmission(BaseModel):
     job_type: str = Field(
         min_length=2,
@@ -73,6 +186,23 @@ class AutomationJob(BaseModel):
         default=0,
         ge=0,
     )
+    attempt_count: int = Field(
+        default=0,
+        ge=0,
+    )
+    retry_count: int = Field(
+        default=0,
+        ge=0,
+    )
+    max_attempts: int = Field(
+        default=1,
+        ge=1,
+    )
+    retry_delays_seconds: list[float] = (
+        Field(
+            default_factory=list
+        )
+    )
     result: Any = None
     error_message: str | None = None
 class AutomationJobSubmissionResult(BaseModel):
@@ -100,6 +230,12 @@ class AutomationWorkerSnapshot(BaseModel):
         ge=0,
     )
     cancelled_count: int = Field(
+        ge=0,
+    )
+    total_attempts: int = Field(
+        ge=0,
+    )
+    retried_job_count: int = Field(
         ge=0,
     )
     registered_job_types: list[str] = Field(

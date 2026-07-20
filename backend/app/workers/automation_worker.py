@@ -11,11 +11,19 @@ from app.schemas.automation import (
     AutomationJob,
     AutomationJobSubmission,
     AutomationJobSubmissionResult,
+    AutomationRetryPolicy,
     AutomationWorkerSnapshot,
+)
+from app.services.automation_retry_service import (
+    AutomationRetryService,
 )
 AutomationJobHandler = Callable[
     [dict[str, Any]],
     Awaitable[Any],
+]
+AutomationSleepFunction = Callable[
+    [float],
+    Awaitable[None],
 ]
 class AutomationWorker:
     def __init__(
@@ -23,6 +31,12 @@ class AutomationWorker:
         *,
         clock_ms: Callable[[], int] | None = None,
         id_factory: Callable[[], str] | None = None,
+        retry_service: (
+            AutomationRetryService | None
+        ) = None,
+        sleep_func: (
+            AutomationSleepFunction | None
+        ) = None,
     ):
         self.clock_ms = (
             clock_ms
@@ -38,12 +52,24 @@ class AutomationWorker:
                 uuid4().hex
             )
         )
+        self.retry_service = (
+            retry_service
+            or AutomationRetryService()
+        )
+        self.sleep_func = (
+            sleep_func
+            or asyncio.sleep
+        )
         self._queue: asyncio.Queue[
             str | None
         ] = asyncio.Queue()
         self._handlers: dict[
             str,
             AutomationJobHandler,
+        ] = {}
+        self._retry_policies: dict[
+            str,
+            AutomationRetryPolicy,
         ] = {}
         self._jobs: dict[
             str,
@@ -82,6 +108,9 @@ class AutomationWorker:
         self,
         job_type: str,
         handler: AutomationJobHandler,
+        retry_policy: (
+            AutomationRetryPolicy | None
+        ) = None,
     ) -> None:
         normalized_job_type = (
             self._normalize_job_type(
@@ -100,6 +129,12 @@ class AutomationWorker:
         self._handlers[
             normalized_job_type
         ] = handler
+        self._retry_policies[
+            normalized_job_type
+        ] = (
+            retry_policy
+            or AutomationRetryPolicy()
+        )
     async def submit(
         self,
         data: AutomationJobSubmission,
@@ -114,6 +149,11 @@ class AutomationWorker:
                 "No handler is registered for "
                 f"{data.job_type}"
             )
+        retry_policy = (
+            self._retry_policies[
+                data.job_type
+            ]
+        )
         deduplication_key = (
             data.deduplication_key
         )
@@ -162,6 +202,9 @@ class AutomationWorker:
             ),
             status="QUEUED",
             created_at_ms=self.clock_ms(),
+            max_attempts=(
+                retry_policy.max_attempts
+            ),
         )
         self._jobs[job.id] = job
         if deduplication_key is not None:
@@ -216,6 +259,15 @@ class AutomationWorker:
             cancelled_count=counts[
                 "CANCELLED"
             ],
+            total_attempts=sum(
+                job.attempt_count
+                for job in self._jobs.values()
+            ),
+            retried_job_count=sum(
+                1
+                for job in self._jobs.values()
+                if job.retry_count > 0
+            ),
             registered_job_types=sorted(
                 self._handlers
             ),
@@ -227,39 +279,71 @@ class AutomationWorker:
         handler = self._handlers.get(
             job.job_type
         )
+        policy = self._retry_policies.get(
+            job.job_type,
+            AutomationRetryPolicy(),
+        )
         job.status = "RUNNING"
         job.started_at_ms = self.clock_ms()
         job.error_message = None
         try:
-            if handler is None:
-                raise RuntimeError(
-                    "Registered handler is missing"
-                )
-            pending_result = handler(
-                dict(job.payload)
-            )
-            if not inspect.isawaitable(
-                pending_result
-            ):
-                raise TypeError(
-                    "Automation job handler must "
-                    "return an awaitable"
-                )
-            job.result = await pending_result
-            job.status = "SUCCEEDED"
+            while True:
+                job.attempt_count += 1
+                try:
+                    if handler is None:
+                        raise RuntimeError(
+                            "Registered handler "
+                            "is missing"
+                        )
+                    pending_result = handler(
+                        dict(job.payload)
+                    )
+                    if not inspect.isawaitable(
+                        pending_result
+                    ):
+                        raise TypeError(
+                            "Automation job handler "
+                            "must return an awaitable"
+                        )
+                    job.result = (
+                        await pending_result
+                    )
+                    job.status = "SUCCEEDED"
+                    job.error_message = None
+                    break
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    message = str(exc).strip()
+                    job.error_message = (
+                        message
+                        or exc.__class__.__name__
+                    )
+                    decision = (
+                        self.retry_service.decide(
+                            error=exc,
+                            attempt_number=(
+                                job.attempt_count
+                            ),
+                            policy=policy,
+                        )
+                    )
+                    if not decision.retry:
+                        job.status = "FAILED"
+                        break
+                    job.retry_count += 1
+                    job.retry_delays_seconds.append(
+                        decision.delay_seconds
+                    )
+                    await self.sleep_func(
+                        decision.delay_seconds
+                    )
         except asyncio.CancelledError:
             job.status = "CANCELLED"
             job.error_message = (
                 "Automation job was cancelled"
             )
             raise
-        except Exception as exc:
-            job.status = "FAILED"
-            message = str(exc).strip()
-            job.error_message = (
-                message
-                or exc.__class__.__name__
-            )
         finally:
             job.completed_at_ms = (
                 self.clock_ms()
