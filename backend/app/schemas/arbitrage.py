@@ -378,3 +378,123 @@ class CrossExchangeScanResult(BaseModel):
     ] = Field(
         default_factory=list
     )
+TriangularSortField = Literal[
+    "net_profit_percent",
+    "net_profit_amount",
+    "gross_profit_percent",
+    "evaluated_starting_amount",
+    "quote_time_skew_ms",
+]
+class TriangularScanRequest(BaseModel):
+    exchange: str = Field(
+        min_length=2,
+        max_length=50,
+    )
+    starting_asset: str = Field(
+        default="USDT",
+        min_length=1,
+        max_length=20,
+    )
+    starting_amount: Decimal = Field(
+        gt=0,
+    )
+    minimum_profit_percent: Decimal = Field(
+        default=Decimal("0"),
+    )
+    maximum_quote_age_ms: int | None = Field(
+        default=None,
+        ge=0,
+    )
+    maximum_time_skew_ms: int | None = Field(
+        default=None,
+        ge=0,
+    )
+    require_full_liquidity: bool = True
+    sort_by: TriangularSortField = (
+        "net_profit_percent"
+    )
+    descending: bool = True
+    limit: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+    )
+    quotes: list[ArbitrageMarketQuote] = Field(
+        min_length=3,
+        max_length=500,
+    )
+    @field_validator(
+        "exchange",
+        "starting_asset",
+    )
+    @classmethod
+    def normalize_triangular_identifier(
+        cls,
+        value: str,
+    ) -> str:
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError(
+                "identifier cannot be blank"
+            )
+        return normalized
+class TriangularOpportunity(BaseModel):
+    exchange: str
+    route_assets: list[str] = Field(
+        min_length=4,
+        max_length=4,
+    )
+    route_symbols: list[str] = Field(
+        min_length=3,
+        max_length=3,
+    )
+    route_sides: list[ArbitrageSide] = Field(
+        min_length=3,
+        max_length=3,
+    )
+    requested_starting_amount: Decimal
+    evaluated_starting_amount: Decimal
+    maximum_starting_amount_by_liquidity: (
+        Decimal
+    )
+    fully_liquid: bool
+    quote_time_skew_ms: int = Field(
+        ge=0,
+    )
+    evaluation: ArbitrageEvaluationResult
+class TriangularScanResult(BaseModel):
+    exchange: str
+    starting_asset: str
+    requested_starting_amount: Decimal
+    total_quotes: int = Field(
+        ge=0,
+    )
+    eligible_quotes: int = Field(
+        ge=0,
+    )
+    total_directed_edges: int = Field(
+        ge=0,
+    )
+    total_cycles_discovered: int = Field(
+        ge=0,
+    )
+    total_routes_evaluated: int = Field(
+        ge=0,
+    )
+    profitable_count: int = Field(
+        ge=0,
+    )
+    matched_count: int = Field(
+        ge=0,
+    )
+    returned_count: int = Field(
+        ge=0,
+    )
+    scanned_at_ms: int = Field(
+        ge=0,
+    )
+    opportunities: list[
+        TriangularOpportunity
+    ] = Field(
+        default_factory=list
+    )
