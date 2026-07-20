@@ -241,3 +241,143 @@ class AutomationWorkerSnapshot(BaseModel):
     registered_job_types: list[str] = Field(
         default_factory=list
     )
+class AutomationIntervalSchedule(BaseModel):
+    schedule_id: str = Field(
+        min_length=1,
+        max_length=100,
+    )
+    job_type: str = Field(
+        min_length=2,
+        max_length=100,
+    )
+    interval_seconds: float = Field(
+        gt=0,
+        le=86400,
+    )
+    initial_delay_seconds: float = Field(
+        default=0.0,
+        ge=0,
+        le=86400,
+    )
+    payload: dict[str, Any] = Field(
+        default_factory=dict
+    )
+    deduplication_key: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+    )
+    enabled: bool = True
+    max_runs: int | None = Field(
+        default=None,
+        ge=1,
+        le=100000,
+    )
+    @field_validator("schedule_id")
+    @classmethod
+    def normalize_schedule_id(
+        cls,
+        value: str,
+    ) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(
+                "schedule_id cannot be blank"
+            )
+        return normalized
+    @field_validator("job_type")
+    @classmethod
+    def normalize_schedule_job_type(
+        cls,
+        value: str,
+    ) -> str:
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError(
+                "job_type cannot be blank"
+            )
+        return normalized
+    @field_validator("deduplication_key")
+    @classmethod
+    def normalize_schedule_deduplication_key(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(
+                "deduplication_key cannot be blank"
+            )
+        return normalized
+class AutomationScheduleState(BaseModel):
+    schedule_id: str
+    job_type: str
+    enabled: bool
+    running: bool = False
+    interval_seconds: float = Field(
+        gt=0,
+    )
+    max_runs: int | None = Field(
+        default=None,
+        ge=1,
+    )
+    submission_count: int = Field(
+        default=0,
+        ge=0,
+    )
+    created_job_count: int = Field(
+        default=0,
+        ge=0,
+    )
+    duplicate_submission_count: int = Field(
+        default=0,
+        ge=0,
+    )
+    failure_count: int = Field(
+        default=0,
+        ge=0,
+    )
+    started_at_ms: int = Field(
+        default=0,
+        ge=0,
+    )
+    stopped_at_ms: int = Field(
+        default=0,
+        ge=0,
+    )
+    last_submitted_at_ms: int = Field(
+        default=0,
+        ge=0,
+    )
+    next_run_at_ms: int = Field(
+        default=0,
+        ge=0,
+    )
+    last_job_id: str | None = None
+    last_error: str | None = None
+class AutomationSchedulerSnapshot(BaseModel):
+    registered_schedule_count: int = Field(
+        ge=0,
+    )
+    running_schedule_count: int = Field(
+        ge=0,
+    )
+    total_submissions: int = Field(
+        ge=0,
+    )
+    total_created_jobs: int = Field(
+        ge=0,
+    )
+    total_duplicate_submissions: int = Field(
+        ge=0,
+    )
+    total_failures: int = Field(
+        ge=0,
+    )
+    schedules: list[
+        AutomationScheduleState
+    ] = Field(
+        default_factory=list
+    )
