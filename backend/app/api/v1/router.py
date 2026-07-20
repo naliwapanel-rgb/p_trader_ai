@@ -3,6 +3,7 @@ from app.api.v1.endpoints import (
     alerts,
     arbitrage,
     auth,
+    automation,
     exchange_accounts,
     exchange_connections,
     exchange_trading,
@@ -39,4 +40,7 @@ api_router.include_router(
 )
 api_router.include_router(
     market_scanner.router
+)
+api_router.include_router(
+    automation.router
 )

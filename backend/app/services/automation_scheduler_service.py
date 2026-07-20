@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import time
 from collections.abc import (
     Awaitable,
@@ -341,17 +341,41 @@ class AutomationIntervalScheduler:
                 f"Schedule {schedule_id} "
                 "is not registered"
             )
+        state = self._states[
+            schedule_id
+        ]
         task = self._tasks.get(
             schedule_id
         )
         if task is None or task.done():
+            if state.running:
+                state.running = False
+                state.stopped_at_ms = (
+                    self.clock_ms()
+                )
+                state.next_run_at_ms = 0
             return False
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
+        finally:
+            # A task may be cancelled before
+            # _run_schedule() begins executing.
+            # Normalize state here as well as in
+            # _run_schedule() to close that race.
+            state.running = False
+            state.stopped_at_ms = (
+                self.clock_ms()
+            )
+            state.next_run_at_ms = 0
+            self._tasks.pop(
+                schedule_id,
+                None,
+            )
         return True
+
     async def stop_all(self) -> int:
         stopped_count = 0
         for schedule_id in sorted(

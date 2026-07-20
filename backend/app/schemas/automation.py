@@ -1,4 +1,4 @@
-﻿import time
+import time
 from typing import Any, Literal
 from pydantic import (
     BaseModel,
@@ -381,3 +381,12 @@ class AutomationSchedulerSnapshot(BaseModel):
     ] = Field(
         default_factory=list
     )
+class AutomationRuntimeHealth(BaseModel):
+    healthy: bool
+    started: bool
+    handlers_registered: bool
+    worker: AutomationWorkerSnapshot
+    scheduler: AutomationSchedulerSnapshot
+class AutomationScheduleActionResult(BaseModel):
+    changed: bool
+    schedule: AutomationScheduleState
