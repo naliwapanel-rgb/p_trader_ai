@@ -73,6 +73,12 @@ class AIQuestionRequest(BaseModel):
 class AIAssistantRequest(
     AIQuestionRequest
 ):
+    conversation_id: int | None = Field(
+        default=None,
+        gt=0,
+    )
+    persist_conversation: bool = False
+
     analysis_type: AIAnalysisType = (
         "GENERAL"
     )
