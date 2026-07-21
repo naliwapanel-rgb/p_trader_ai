@@ -38,11 +38,13 @@ def build_bot(
     *,
     status: str = "RUNNING",
     strategy_type: str = "RULE_BASED",
+    paper_trading: bool = True,
 ):
     return SimpleNamespace(
         id=10,
         user_id=7,
         exchange_account_id=3,
+        paper_trading=paper_trading,
         strategy_type=strategy_type,
         symbol="BTCUSDT",
         category="linear",
@@ -390,7 +392,8 @@ async def test_stop_missing_schedule_is_safe():
 async def test_tick_evaluates_running_bot():
     scheduler = build_scheduler()
     bot = build_bot(
-        status="RUNNING"
+        status="RUNNING",
+        paper_trading=True,
     )
     (
         db,
@@ -403,12 +406,43 @@ async def test_tick_evaluates_running_bot():
     scanner = build_market_scanner(
         ticker=ticker
     )
+    decision = build_decision(
+        action="BUY"
+    )
     strategy_runner = (
         build_strategy_runner(
-            decision=build_decision(
-                action="BUY"
-            )
+            decision=decision
         )
+    )
+    paper_execution = {
+        "outcome": "OPENED",
+        "decision_action": "BUY",
+        "message": (
+            "Paper long position opened"
+        ),
+        "account_created": True,
+        "account": {
+            "id": 20,
+            "user_id": 7,
+            "trading_bot_id": 10,
+            "currency": "USDT",
+            "initial_balance_usd": 10000,
+            "cash_balance_usd": 9975,
+            "reserved_balance_usd": 25,
+            "equity_usd": 10000,
+            "realized_pnl_usd": 0,
+            "unrealized_pnl_usd": 0,
+            "total_fees_usd": 0.015,
+            "status": "ACTIVE",
+            "created_at": FIXED_TIME,
+            "updated_at": FIXED_TIME,
+        },
+        "position": None,
+        "order": None,
+    }
+    paper_engine = MagicMock()
+    paper_engine.execute.return_value = (
+        paper_execution
     )
     service = TradingBotRuntimeService(
         scheduler=scheduler,
@@ -422,6 +456,9 @@ async def test_tick_evaluates_running_bot():
         ),
         market_scanner_service=scanner,
         strategy_runner=strategy_runner,
+        paper_engine_factory=(
+            lambda session: paper_engine
+        ),
         clock=lambda: FIXED_TIME,
     )
     result = await service.execute_tick({
@@ -431,6 +468,10 @@ async def test_tick_evaluates_running_bot():
     assert result["outcome"] == "EVALUATED"
     assert result["bot_status"] == "RUNNING"
     assert result["decision"]["action"] == "BUY"
+    assert (
+        result["paper_execution"]["outcome"]
+        == "OPENED"
+    )
     assert bot.last_run_at == FIXED_TIME
     assert bot.last_error is None
     scanner.get_tickers.assert_awaited_once_with(
@@ -440,6 +481,10 @@ async def test_tick_evaluates_running_bot():
     strategy_runner.run.assert_awaited_once_with(
         bot=bot,
         ticker=ticker,
+    )
+    paper_engine.execute.assert_called_once_with(
+        bot=bot,
+        decision=decision,
     )
     db.close.assert_called_once()
 @pytest.mark.asyncio
@@ -649,6 +694,113 @@ async def test_missing_symbol_ticker_marks_error():
         })
     assert bot.status == "ERROR"
     assert "BTCUSDT" in bot.last_error
+@pytest.mark.asyncio
+async def test_non_paper_bot_only_evaluates_strategy():
+    scheduler = build_scheduler()
+    bot = build_bot(
+        paper_trading=False
+    )
+    (
+        db,
+        repository,
+        account_repository,
+    ) = build_dependencies(
+        bot=bot
+    )
+    ticker = build_ticker()
+    scanner = build_market_scanner(
+        ticker=ticker
+    )
+    decision = build_decision(
+        action="BUY"
+    )
+    strategy_runner = (
+        build_strategy_runner(
+            decision=decision
+        )
+    )
+    paper_engine = MagicMock()
+    service = TradingBotRuntimeService(
+        scheduler=scheduler,
+        session_factory=lambda: db,
+        repository_factory=(
+            lambda session: repository
+        ),
+        account_repository_factory=(
+            lambda session:
+            account_repository
+        ),
+        market_scanner_service=scanner,
+        strategy_runner=strategy_runner,
+        paper_engine_factory=(
+            lambda session: paper_engine
+        ),
+        clock=lambda: FIXED_TIME,
+    )
+    result = await service.execute_tick({
+        "user_id": 7,
+        "bot_id": 10,
+    })
+    assert result["outcome"] == "EVALUATED"
+    assert result["decision"]["action"] == "BUY"
+    assert result["paper_execution"] is None
+    paper_engine.execute.assert_not_called()
+    assert bot.status == "RUNNING"
+    assert bot.last_run_at == FIXED_TIME
+@pytest.mark.asyncio
+async def test_paper_engine_failure_marks_bot_error():
+    scheduler = build_scheduler()
+    bot = build_bot(
+        paper_trading=True
+    )
+    (
+        db,
+        repository,
+        account_repository,
+    ) = build_dependencies(
+        bot=bot
+    )
+    scanner = build_market_scanner()
+    strategy_runner = (
+        build_strategy_runner()
+    )
+    paper_engine = MagicMock()
+    paper_engine.execute.side_effect = (
+        RuntimeError(
+            "paper execution failure"
+        )
+    )
+    service = TradingBotRuntimeService(
+        scheduler=scheduler,
+        session_factory=lambda: db,
+        repository_factory=(
+            lambda session: repository
+        ),
+        account_repository_factory=(
+            lambda session:
+            account_repository
+        ),
+        market_scanner_service=scanner,
+        strategy_runner=strategy_runner,
+        paper_engine_factory=(
+            lambda session: paper_engine
+        ),
+        clock=lambda: FIXED_TIME,
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="paper execution failure",
+    ):
+        await service.execute_tick({
+            "user_id": 7,
+            "bot_id": 10,
+        })
+    assert bot.status == "ERROR"
+    assert (
+        bot.last_error
+        == "paper execution failure"
+    )
+    db.rollback.assert_called_once()
 def test_mark_runtime_error():
     scheduler = build_scheduler()
     bot = build_bot()

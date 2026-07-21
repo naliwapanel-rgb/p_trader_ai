@@ -38,6 +38,9 @@ from app.services.automation_scheduler_service import (
 from app.services.market_scanner_service import (
     MarketScannerService,
 )
+from app.services.paper_trading_engine import (
+    PaperTradingEngine,
+)
 from app.services.trading_bot_strategy_runner import (
     TradingBotStrategyRunner,
 )
@@ -52,6 +55,10 @@ RepositoryFactory = Callable[
 AccountRepositoryFactory = Callable[
     [Session],
     ExchangeAccountRepository,
+]
+PaperEngineFactory = Callable[
+    [Session],
+    PaperTradingEngine,
 ]
 RuntimeClock = Callable[[], datetime]
 class TradingBotRuntimeService:
@@ -79,6 +86,9 @@ class TradingBotRuntimeService:
         strategy_runner: (
             TradingBotStrategyRunner | None
         ) = None,
+        paper_engine_factory: (
+            PaperEngineFactory | None
+        ) = None,
         clock: RuntimeClock | None = None,
     ):
         self.scheduler = scheduler
@@ -102,6 +112,16 @@ class TradingBotRuntimeService:
             clock
             or (
                 lambda: datetime.now(UTC)
+            )
+        )
+        self.paper_engine_factory = (
+            paper_engine_factory
+            or (
+                lambda db:
+                PaperTradingEngine(
+                    db,
+                    clock=self.clock,
+                )
             )
         )
         self.strategy_runner = (
@@ -421,6 +441,7 @@ class TradingBotRuntimeService:
                     bot_status=bot.status,
                     ran_at=None,
                     decision=None,
+                    paper_execution=None,
                 )
                 return result.model_dump(
                     mode="json"
@@ -437,6 +458,19 @@ class TradingBotRuntimeService:
                     ticker=ticker,
                 )
             )
+            paper_execution = None
+            if bot.paper_trading:
+                paper_engine = (
+                    self.paper_engine_factory(
+                        db
+                    )
+                )
+                paper_execution = (
+                    paper_engine.execute(
+                        bot=bot,
+                        decision=decision,
+                    )
+                )
             now = decision.evaluated_at
             repository.save_lifecycle(
                 bot=bot,
@@ -452,6 +486,9 @@ class TradingBotRuntimeService:
                 bot_status="RUNNING",
                 ran_at=now,
                 decision=decision,
+                paper_execution=(
+                    paper_execution
+                ),
             )
             return result.model_dump(
                 mode="json"

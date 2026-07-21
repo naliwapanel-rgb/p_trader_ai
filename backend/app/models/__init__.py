@@ -10,6 +10,11 @@ from app.models.notification_preference import (
     NotificationPreference,
 )
 from app.models.portfolio import Portfolio
+from app.models.paper_trading import (
+    PaperTradingAccount,
+    PaperTradingOrder,
+    PaperTradingPosition,
+)
 from app.models.portfolio_sync_snapshot import (
     PortfolioSyncSnapshot,
 )
@@ -26,6 +31,9 @@ __all__ = [
     "Alert",
     "ExchangeAccount",
     "NotificationPreference",
+    "PaperTradingAccount",
+    "PaperTradingOrder",
+    "PaperTradingPosition",
     "Portfolio",
     "PortfolioSyncSnapshot",
     "TradingBot",

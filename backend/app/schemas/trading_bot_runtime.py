@@ -8,6 +8,9 @@ from pydantic import (
     BaseModel,
     Field,
 )
+from app.schemas.paper_trading import (
+    PaperTradingExecutionResult,
+)
 from app.schemas.trading_bot_strategy import (
     TradingBotStrategyDecision,
 )
@@ -35,6 +38,10 @@ class TradingBotTickResult(BaseModel):
     ran_at: datetime | None = None
     decision: (
         TradingBotStrategyDecision
+        | None
+    ) = None
+    paper_execution: (
+        PaperTradingExecutionResult
         | None
     ) = None
 class TradingBotRuntimeScheduleResult(
