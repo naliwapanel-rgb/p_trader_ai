@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
+    ai_conversations,
     ai_contextual_analysis,
     ai_context,
     ai_assistant,
@@ -50,3 +51,4 @@ api_router.include_router(
 api_router.include_router(ai_assistant.router)
 api_router.include_router(ai_context.router)
 api_router.include_router(ai_contextual_analysis.router)
+api_router.include_router(ai_conversations.router)
