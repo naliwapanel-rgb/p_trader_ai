@@ -8,8 +8,8 @@ remaining implementation can continue consistently.
 - 12D - Bot Runtime and Scheduler Integration
 - 12E - Strategy Interface and Rule-Based Runner
 - 12F - Paper Trading Engine
-## Remaining
 - 12G - Bot Trade History and Performance Tracking
+## Remaining
 - 12H - Backtesting Engine
 - 12I - DCA and Grid Bot Strategies
 - 12J - Trend, Mean-Reversion and Scalping Strategies
@@ -96,3 +96,47 @@ The paper-trading engine writes only to the isolated paper-trading
 ledger. It must not import or invoke exchange-order placement
 services. Public trade-history and performance access is deferred
 to Phase 12G.
+
+## Phase 12G scope
+Phase 12G exposes authenticated, user-scoped paper-trading history
+and performance reporting for each trading bot.
+Included:
+- Paper-trading account summary
+- Paginated paper-order history
+- Paginated open and closed position history
+- Position-status filtering
+- Order count
+- Trade and completed-trade counts
+- Open-trade count
+- Winning, losing and breakeven trade counts
+- Gross realized profit and loss
+- Closed-position fees
+- Net realized profit and loss
+- Unrealized profit and loss
+- Total fees
+- Total net account profit and loss
+- Win rate
+- Average win
+- Average loss
+- Profit factor
+- Account return percentage
+- Authenticated and user-scoped read-only API endpoints
+- OpenAPI route registration
+Excluded:
+- Backtesting
+- Performance forecasting
+- Equity-curve persistence
+- Live exchange trade history
+- Live exchange performance reporting
+- Strategy modification
+- DCA, Grid or Arbitrage execution
+- Copy trading
+## Phase 12G API endpoints
+- `GET /trading-bots/{bot_id}/paper-trading/account`
+- `GET /trading-bots/{bot_id}/paper-trading/orders`
+- `GET /trading-bots/{bot_id}/paper-trading/positions`
+- `GET /trading-bots/{bot_id}/paper-trading/performance`
+## Phase 12G safety boundary
+Phase 12G is read-only. It calculates performance from the isolated
+paper-trading ledger and must not create orders, modify positions,
+change account balances or invoke live exchange services.

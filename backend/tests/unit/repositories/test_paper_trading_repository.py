@@ -343,3 +343,142 @@ def test_closed_position_is_not_open(
     )
     assert len(closed) == 1
     assert closed[0].id == position.id
+def test_history_counts_and_pagination(
+    db_session,
+):
+    create_user_and_bot(
+        db_session
+    )
+    repository = PaperTradingRepository(
+        db_session
+    )
+    account, _ = (
+        repository.get_or_create_account(
+            account_data()
+        )
+    )
+    first = repository.create_position(
+        position_data(
+            account_id=account.id
+        )
+    )
+    second_data = position_data(
+        account_id=account.id
+    )
+    second_data.symbol = "ETHUSDT"
+    second = repository.create_position(
+        second_data
+    )
+    repository.save_position(
+        position=second,
+        status="CLOSED",
+        closed_at=NOW,
+    )
+    for position in (
+        first,
+        second,
+    ):
+        repository.create_order(
+            PaperTradingOrderCreate(
+                user_id=7,
+                trading_bot_id=10,
+                paper_account_id=account.id,
+                paper_position_id=position.id,
+                symbol=position.symbol,
+                category="linear",
+                side="BUY",
+                position_effect="OPEN",
+                quantity=0.001,
+                reference_price=100,
+                fill_price=100.01,
+                gross_value_usd=0.10001,
+                fee_rate=0.0006,
+                fee_usd=0.000060006,
+                slippage_rate=0.0001,
+                slippage_usd=0.00001,
+                realized_pnl_usd=0,
+                filled_at=NOW,
+            )
+        )
+    assert (
+        repository.count_positions(
+            paper_account_id=account.id
+        )
+        == 2
+    )
+    assert (
+        repository.count_positions(
+            paper_account_id=account.id,
+            status="OPEN",
+        )
+        == 1
+    )
+    assert (
+        repository.count_positions(
+            paper_account_id=account.id,
+            status="CLOSED",
+        )
+        == 1
+    )
+    assert (
+        repository.count_orders(
+            paper_account_id=account.id
+        )
+        == 2
+    )
+    positions = repository.list_positions(
+        paper_account_id=account.id,
+        limit=1,
+        offset=1,
+    )
+    orders = repository.list_orders(
+        paper_account_id=account.id,
+        limit=1,
+        offset=1,
+    )
+    assert len(positions) == 1
+    assert len(orders) == 1
+def test_history_is_scoped_to_paper_account(
+    db_session,
+):
+    create_user_and_bot(
+        db_session
+    )
+    repository = PaperTradingRepository(
+        db_session
+    )
+    account, _ = (
+        repository.get_or_create_account(
+            account_data()
+        )
+    )
+    repository.create_position(
+        position_data(
+            account_id=account.id
+        )
+    )
+    assert (
+        repository.count_positions(
+            paper_account_id=999
+        )
+        == 0
+    )
+    assert (
+        repository.count_orders(
+            paper_account_id=999
+        )
+        == 0
+    )
+    assert (
+        repository.list_positions(
+            paper_account_id=999,
+            limit=50,
+        )
+        == []
+    )
+    assert (
+        repository.list_orders(
+            paper_account_id=999
+        )
+        == []
+    )

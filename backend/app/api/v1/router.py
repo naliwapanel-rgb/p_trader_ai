@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     notification_preferences,
     portfolios,
     risk_management,
+    trading_bot_history,
     trading_bots,
     users,
     watchlists,
@@ -42,6 +43,9 @@ api_router.include_router(
 )
 api_router.include_router(
     risk_management.router
+)
+api_router.include_router(
+    trading_bot_history.router
 )
 api_router.include_router(
     trading_bots.router

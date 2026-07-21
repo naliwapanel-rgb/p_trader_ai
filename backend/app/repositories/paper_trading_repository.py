@@ -226,6 +226,8 @@ class PaperTradingRepository:
         *,
         paper_account_id: int,
         status: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[PaperTradingPosition]:
         query = (
             self.db
@@ -243,7 +245,7 @@ class PaperTradingRepository:
                 PaperTradingPosition.status
                 == status
             )
-        return (
+        query = (
             query
             .order_by(
                 (
@@ -253,8 +255,34 @@ class PaperTradingRepository:
                 ),
                 PaperTradingPosition.id.desc(),
             )
-            .all()
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
+    def count_positions(
+        self,
+        *,
+        paper_account_id: int,
+        status: str | None = None,
+    ) -> int:
+        query = (
+            self.db
+            .query(PaperTradingPosition)
+            .filter(
+                (
+                    PaperTradingPosition
+                    .paper_account_id
+                    == paper_account_id
+                )
+            )
+        )
+        if status is not None:
+            query = query.filter(
+                PaperTradingPosition.status
+                == status
+            )
+        return query.count()
     def create_order(
         self,
         data: PaperTradingOrderCreate,
@@ -294,4 +322,21 @@ class PaperTradingRepository:
             .offset(offset)
             .limit(limit)
             .all()
+        )
+    def count_orders(
+        self,
+        *,
+        paper_account_id: int,
+    ) -> int:
+        return (
+            self.db
+            .query(PaperTradingOrder)
+            .filter(
+                (
+                    PaperTradingOrder
+                    .paper_account_id
+                    == paper_account_id
+                )
+            )
+            .count()
         )
