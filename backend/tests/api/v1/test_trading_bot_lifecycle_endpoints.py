@@ -6,6 +6,7 @@ from types import (
     SimpleNamespace,
 )
 from unittest.mock import (
+    AsyncMock,
     MagicMock,
 )
 from fastapi import (
@@ -17,6 +18,9 @@ from fastapi.exceptions import (
 )
 from fastapi.testclient import (
     TestClient,
+)
+from app.api.automation_dependencies import (
+    get_automation_runtime,
 )
 from app.api.dependencies import (
     get_current_user,
@@ -108,6 +112,18 @@ def build_app(
     )
     app.dependency_overrides[get_db] = (
         lambda: MagicMock()
+    )
+    runtime_service = SimpleNamespace(
+        start_for_bot=AsyncMock(),
+        stop_for_bot=AsyncMock(),
+        mark_runtime_error=MagicMock(),
+    )
+    app.dependency_overrides[
+        get_automation_runtime
+    ] = lambda: SimpleNamespace(
+        bot_runtime_service=(
+            runtime_service
+        )
     )
     if authenticated:
         app.dependency_overrides[

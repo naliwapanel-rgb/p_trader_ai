@@ -92,6 +92,21 @@ class TradingBotRepository:
             .limit(limit)
             .all()
         )
+    def list_by_status(
+        self,
+        *,
+        status: str,
+    ) -> list[TradingBot]:
+        return (
+            self.db.query(TradingBot)
+            .filter(
+                TradingBot.status == status
+            )
+            .order_by(
+                TradingBot.id.asc(),
+            )
+            .all()
+        )
     @staticmethod
     def _validate_effective_values(
         *,

@@ -1,10 +1,15 @@
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
     Query,
+    status,
 )
 from sqlalchemy.orm import (
     Session,
+)
+from app.api.automation_dependencies import (
+    get_automation_runtime,
 )
 from app.api.dependencies import (
     get_current_user,
@@ -22,6 +27,9 @@ from app.schemas.trading_bot import (
     TradingBotStatus,
     TradingBotUpdateRequest,
 )
+from app.services.automation_runtime_service import (
+    AutomationRuntime,
+)
 from app.services.trading_bot_lifecycle_service import (
     TradingBotLifecycleService,
 )
@@ -35,6 +43,51 @@ router = APIRouter(
     prefix="/trading-bots",
     tags=["Trading Bots"],
 )
+async def _start_bot_runtime(
+    *,
+    result: TradingBotLifecycleActionResult,
+    runtime: AutomationRuntime,
+) -> None:
+    try:
+        await (
+            runtime.bot_runtime_service
+            .start_for_bot(result.bot)
+        )
+    except Exception as error:
+        runtime.bot_runtime_service.mark_runtime_error(
+            user_id=result.bot.user_id,
+            bot_id=result.bot.id,
+            error=error,
+        )
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Trading bot runtime could "
+                "not be started"
+            ),
+        ) from error
+async def _stop_bot_runtime(
+    *,
+    result: TradingBotLifecycleActionResult,
+    runtime: AutomationRuntime,
+) -> None:
+    try:
+        await (
+            runtime.bot_runtime_service
+            .stop_for_bot(result.bot)
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Trading bot runtime could "
+                "not be stopped"
+            ),
+        ) from error
 @router.get("")
 async def list_my_trading_bots(
     bot_status: (
@@ -206,6 +259,9 @@ async def start_my_trading_bot(
         get_current_user
     ),
     db: Session = Depends(get_db),
+    runtime: AutomationRuntime = Depends(
+        get_automation_runtime
+    ),
 ):
     result = (
         TradingBotLifecycleService(db)
@@ -213,6 +269,10 @@ async def start_my_trading_bot(
             current_user=current_user,
             bot_id=bot_id,
         )
+    )
+    await _start_bot_runtime(
+        result=result,
+        runtime=runtime,
     )
     return success_response(
         message=(
@@ -230,6 +290,9 @@ async def pause_my_trading_bot(
         get_current_user
     ),
     db: Session = Depends(get_db),
+    runtime: AutomationRuntime = Depends(
+        get_automation_runtime
+    ),
 ):
     result = (
         TradingBotLifecycleService(db)
@@ -237,6 +300,10 @@ async def pause_my_trading_bot(
             current_user=current_user,
             bot_id=bot_id,
         )
+    )
+    await _stop_bot_runtime(
+        result=result,
+        runtime=runtime,
     )
     return success_response(
         message=(
@@ -254,6 +321,9 @@ async def resume_my_trading_bot(
         get_current_user
     ),
     db: Session = Depends(get_db),
+    runtime: AutomationRuntime = Depends(
+        get_automation_runtime
+    ),
 ):
     result = (
         TradingBotLifecycleService(db)
@@ -261,6 +331,10 @@ async def resume_my_trading_bot(
             current_user=current_user,
             bot_id=bot_id,
         )
+    )
+    await _start_bot_runtime(
+        result=result,
+        runtime=runtime,
     )
     return success_response(
         message=(
@@ -278,6 +352,9 @@ async def stop_my_trading_bot(
         get_current_user
     ),
     db: Session = Depends(get_db),
+    runtime: AutomationRuntime = Depends(
+        get_automation_runtime
+    ),
 ):
     result = (
         TradingBotLifecycleService(db)
@@ -285,6 +362,10 @@ async def stop_my_trading_bot(
             current_user=current_user,
             bot_id=bot_id,
         )
+    )
+    await _stop_bot_runtime(
+        result=result,
+        runtime=runtime,
     )
     return success_response(
         message=(

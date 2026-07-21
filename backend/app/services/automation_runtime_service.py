@@ -1,4 +1,4 @@
-﻿from app.schemas.automation import (
+from app.schemas.automation import (
     AutomationRuntimeHealth,
 )
 from app.services.automation_scheduler_service import (
@@ -6,6 +6,9 @@ from app.services.automation_scheduler_service import (
 )
 from app.services.automation_trade_execution_service import (
     AutomatedTradeExecutionService,
+)
+from app.services.trading_bot_runtime_service import (
+    TradingBotRuntimeService,
 )
 from app.workers.automation_worker import (
     AutomationWorker,
@@ -28,6 +31,10 @@ class AutomationRuntime:
         ) = None,
         trade_execution_service: (
             AutomatedTradeExecutionService
+            | None
+        ) = None,
+        bot_runtime_service: (
+            TradingBotRuntimeService
             | None
         ) = None,
     ):
@@ -54,6 +61,20 @@ class AutomationRuntime:
             trade_execution_service
             or AutomatedTradeExecutionService()
         )
+        self.bot_runtime_service = (
+            bot_runtime_service
+            or TradingBotRuntimeService(
+                scheduler=self.scheduler
+            )
+        )
+        if (
+            self.bot_runtime_service.scheduler
+            is not self.scheduler
+        ):
+            raise ValueError(
+                "Trading bot runtime service "
+                "must use the runtime scheduler"
+            )
         self._handlers_registered = False
         self._started = False
         self.register_handlers_once()
@@ -73,6 +94,9 @@ class AutomationRuntime:
         if self._handlers_registered:
             return False
         self.trade_execution_service.register_handlers(
+            self.worker
+        )
+        self.bot_runtime_service.register_handler(
             self.worker
         )
         self._handlers_registered = True

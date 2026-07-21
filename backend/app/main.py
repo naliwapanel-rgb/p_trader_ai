@@ -1,4 +1,4 @@
-﻿from contextlib import (
+from contextlib import (
     asynccontextmanager,
 )
 from fastapi import (
@@ -34,6 +34,14 @@ async def lifespan(
         runtime
     )
     await runtime.start()
+    trading_bot_restore = (
+        await runtime
+        .bot_runtime_service
+        .restore_running_bots()
+    )
+    application.state.trading_bot_restore = (
+        trading_bot_restore
+    )
     try:
         yield
     finally:

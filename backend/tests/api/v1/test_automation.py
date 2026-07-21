@@ -12,6 +12,9 @@ from app.api.v1.endpoints.automation import (
 from app.services.automation_runtime_service import (
     AutomationRuntime,
 )
+from app.services.trading_bot_runtime_service import (
+    TradingBotRuntimeService,
+)
 def _market_job_payload(
     *,
     user_id: int | None = None,
@@ -81,6 +84,7 @@ def test_health_and_snapshots_are_available():
         == [
             "TRADE_LIMIT_ORDER",
             "TRADE_MARKET_ORDER",
+            TradingBotRuntimeService.JOB_TYPE,
         ]
     )
     assert (

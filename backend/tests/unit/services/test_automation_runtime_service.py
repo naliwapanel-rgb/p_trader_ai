@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import pytest
 from app.schemas.automation import (
     AutomationIntervalSchedule,
@@ -11,6 +11,9 @@ from app.services.automation_scheduler_service import (
 )
 from app.services.automation_trade_execution_service import (
     AutomatedTradeExecutionService,
+)
+from app.services.trading_bot_runtime_service import (
+    TradingBotRuntimeService,
 )
 from app.workers.automation_worker import (
     AutomationWorker,
@@ -28,6 +31,7 @@ def test_runtime_registers_trade_handlers_once():
         .LIMIT_ORDER_JOB_TYPE,
         AutomatedTradeExecutionService
         .MARKET_ORDER_JOB_TYPE,
+        TradingBotRuntimeService.JOB_TYPE,
     ]
     assert (
         runtime.register_handlers_once()
