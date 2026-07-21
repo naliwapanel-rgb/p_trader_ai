@@ -28,6 +28,9 @@ from app.services.ai_context_service import (
 from app.services.ai_contextual_analysis_service import (
     AIContextAwareAnalysisService,
 )
+from app.services.ai_conversation_aware_analysis_service import (
+    AIConversationAwareAnalysisService,
+)
 from app.services.ai_conversation_service import (
     AIConversationService,
 )
@@ -44,12 +47,31 @@ def get_context_aware_analysis_service(
     ) = Depends(
         get_ai_context_builder_service
     ),
-) -> AIContextAwareAnalysisService:
-    return AIContextAwareAnalysisService(
-        context_builder=context_builder,
-        analysis_service=(
-            DeterministicAIAnalysisService()
-        ),
+    conversation_service: (
+        AIConversationService
+    ) = Depends(
+        get_ai_conversation_service
+    ),
+) -> AIConversationAwareAnalysisService:
+    contextual_service = (
+        AIContextAwareAnalysisService(
+            context_builder=(
+                context_builder
+            ),
+            analysis_service=(
+                DeterministicAIAnalysisService()
+            ),
+        )
+    )
+    return (
+        AIConversationAwareAnalysisService(
+            contextual_service=(
+                contextual_service
+            ),
+            conversation_service=(
+                conversation_service
+            ),
+        )
     )
 def _assistant_metadata(
     result,
@@ -89,6 +111,20 @@ def _user_metadata(
         "include_user_context": (
             data.include_user_context
         ),
+        (
+            "include_conversation_"
+            "history"
+        ): (
+            data
+            .include_conversation_history
+        ),
+        (
+            "conversation_history_"
+            "limit"
+        ): (
+            data
+            .conversation_history_limit
+        ),
     }
 @router.post("/contextual-query")
 async def answer_contextual_query(
@@ -97,7 +133,7 @@ async def answer_contextual_query(
         get_current_user
     ),
     service: (
-        AIContextAwareAnalysisService
+        AIConversationAwareAnalysisService
     ) = Depends(
         get_context_aware_analysis_service
     ),
@@ -128,9 +164,7 @@ async def answer_contextual_query(
             conversation = (
                 conversation_service
                 .create_conversation(
-                    current_user=(
-                        current_user
-                    ),
+                    current_user=current_user,
                     data=(
                         AIConversationCreateRequest()
                     ),

@@ -329,6 +329,8 @@ def test_persisted_metadata_remains_safe(
         "portfolio_id": None,
         "exchange_account_id": None,
         "include_user_context": True,
+        "include_conversation_history": True,
+        "conversation_history_limit": 12,
     }
     assert (
         exchange_data
