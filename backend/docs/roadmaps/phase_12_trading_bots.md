@@ -39,3 +39,27 @@ Excluded:
 The Phase 12D runtime handler must never import or invoke exchange
 order-placement services. It performs heartbeat and runtime-state
 management only.
+
+## Phase 12E scope
+Phase 12E introduces a common strategy architecture and connects
+safe strategy evaluation to each running trading bot tick.
+Included:
+- Strategy context and decision schemas
+- Common asynchronous strategy interface
+- Strategy registry
+- Initial `RULE_BASED` strategy
+- Validated `BUY`, `SELL` and `HOLD` decisions
+- Bybit normalized ticker context
+- Strategy configuration validation before runtime startup
+- Strategy evaluation during scheduled bot ticks
+- Runtime errors persisted through the existing error boundary
+Excluded:
+- Market or limit-order placement
+- Paper-trade creation
+- Live exchange execution
+- Position opening or closing
+- Backtesting
+- DCA, Grid or Arbitrage execution
+## Phase 12E safety boundary
+Strategy evaluation returns decisions only. It must not import or
+invoke exchange order-placement or position-management services.

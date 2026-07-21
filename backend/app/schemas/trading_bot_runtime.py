@@ -8,6 +8,9 @@ from pydantic import (
     BaseModel,
     Field,
 )
+from app.schemas.trading_bot_strategy import (
+    TradingBotStrategyDecision,
+)
 class TradingBotTickJob(BaseModel):
     user_id: int = Field(
         ge=1,
@@ -17,6 +20,7 @@ class TradingBotTickJob(BaseModel):
     )
 TradingBotTickOutcome = Literal[
     "HEARTBEAT",
+    "EVALUATED",
     "SKIPPED",
 ]
 class TradingBotTickResult(BaseModel):
@@ -29,6 +33,10 @@ class TradingBotTickResult(BaseModel):
     outcome: TradingBotTickOutcome
     bot_status: str
     ran_at: datetime | None = None
+    decision: (
+        TradingBotStrategyDecision
+        | None
+    ) = None
 class TradingBotRuntimeScheduleResult(
     BaseModel
 ):

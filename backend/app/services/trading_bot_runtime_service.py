@@ -14,11 +14,17 @@ from sqlalchemy.orm import (
 from app.database.session import (
     SessionLocal,
 )
+from app.repositories.exchange_account_repository import (
+    ExchangeAccountRepository,
+)
 from app.repositories.trading_bot_repository import (
     TradingBotRepository,
 )
 from app.schemas.automation import (
     AutomationIntervalSchedule,
+)
+from app.schemas.market_scanner import (
+    MarketTickerSnapshot,
 )
 from app.schemas.trading_bot_runtime import (
     TradingBotRuntimeRestoreResult,
@@ -29,6 +35,12 @@ from app.schemas.trading_bot_runtime import (
 from app.services.automation_scheduler_service import (
     AutomationIntervalScheduler,
 )
+from app.services.market_scanner_service import (
+    MarketScannerService,
+)
+from app.services.trading_bot_strategy_runner import (
+    TradingBotStrategyRunner,
+)
 from app.workers.automation_worker import (
     AutomationWorker,
 )
@@ -36,6 +48,10 @@ SessionFactory = Callable[[], Session]
 RepositoryFactory = Callable[
     [Session],
     TradingBotRepository,
+]
+AccountRepositoryFactory = Callable[
+    [Session],
+    ExchangeAccountRepository,
 ]
 RuntimeClock = Callable[[], datetime]
 class TradingBotRuntimeService:
@@ -53,6 +69,16 @@ class TradingBotRuntimeService:
         repository_factory: (
             RepositoryFactory | None
         ) = None,
+        account_repository_factory: (
+            AccountRepositoryFactory
+            | None
+        ) = None,
+        market_scanner_service: (
+            MarketScannerService | None
+        ) = None,
+        strategy_runner: (
+            TradingBotStrategyRunner | None
+        ) = None,
         clock: RuntimeClock | None = None,
     ):
         self.scheduler = scheduler
@@ -64,10 +90,24 @@ class TradingBotRuntimeService:
             repository_factory
             or TradingBotRepository
         )
+        self.account_repository_factory = (
+            account_repository_factory
+            or ExchangeAccountRepository
+        )
+        self.market_scanner_service = (
+            market_scanner_service
+            or MarketScannerService()
+        )
         self.clock = (
             clock
             or (
                 lambda: datetime.now(UTC)
+            )
+        )
+        self.strategy_runner = (
+            strategy_runner
+            or TradingBotStrategyRunner(
+                clock=self.clock
             )
         )
     @staticmethod
@@ -196,6 +236,9 @@ class TradingBotRuntimeService:
         self,
         bot,
     ) -> TradingBotRuntimeScheduleResult:
+        self.strategy_runner.validate_bot(
+            bot
+        )
         definition = (
             self._schedule_definition(bot)
         )
@@ -280,6 +323,66 @@ class TradingBotRuntimeService:
                 ),
             )
         )
+    async def _load_ticker(
+        self,
+        *,
+        bot,
+        account_repository: (
+            ExchangeAccountRepository
+        ),
+    ) -> MarketTickerSnapshot:
+        if bot.exchange_account_id is None:
+            raise ValueError(
+                "Trading bot requires an "
+                "exchange account"
+            )
+        account = (
+            account_repository
+            .get_by_id_and_user(
+                account_id=(
+                    bot.exchange_account_id
+                ),
+                user_id=bot.user_id,
+            )
+        )
+        if account is None:
+            raise ValueError(
+                "Trading bot exchange account "
+                "was not found"
+            )
+        if not account.is_active:
+            raise ValueError(
+                "Trading bot exchange account "
+                "is inactive"
+            )
+        exchange_name = (
+            account.exchange_name
+            .strip()
+            .upper()
+        )
+        if exchange_name != "BYBIT":
+            raise ValueError(
+                "Phase 12E strategy market "
+                "context currently supports "
+                "BYBIT only"
+            )
+        batch = await (
+            self.market_scanner_service
+            .get_tickers(
+                category=bot.category,
+                is_testnet=(
+                    account.is_testnet
+                ),
+            )
+        )
+        symbol = bot.symbol.strip().upper()
+        for ticker in batch.tickers:
+            if ticker.symbol == symbol:
+                return ticker
+        raise ValueError(
+            "Trading bot market ticker "
+            f"was not found for {symbol}"
+        )
     async def execute_tick(
         self,
         payload: dict[str, Any],
@@ -290,6 +393,11 @@ class TradingBotRuntimeService:
         db = self.session_factory()
         repository = (
             self.repository_factory(db)
+        )
+        account_repository = (
+            self.account_repository_factory(
+                db
+            )
         )
         bot = None
         try:
@@ -312,11 +420,24 @@ class TradingBotRuntimeService:
                     outcome="SKIPPED",
                     bot_status=bot.status,
                     ran_at=None,
+                    decision=None,
                 )
                 return result.model_dump(
                     mode="json"
                 )
-            now = self.clock()
+            ticker = await self._load_ticker(
+                bot=bot,
+                account_repository=(
+                    account_repository
+                ),
+            )
+            decision = await (
+                self.strategy_runner.run(
+                    bot=bot,
+                    ticker=ticker,
+                )
+            )
+            now = decision.evaluated_at
             repository.save_lifecycle(
                 bot=bot,
                 status="RUNNING",
@@ -327,9 +448,10 @@ class TradingBotRuntimeService:
             result = TradingBotTickResult(
                 user_id=data.user_id,
                 bot_id=data.bot_id,
-                outcome="HEARTBEAT",
+                outcome="EVALUATED",
                 bot_status="RUNNING",
                 ran_at=now,
+                decision=decision,
             )
             return result.model_dump(
                 mode="json"
