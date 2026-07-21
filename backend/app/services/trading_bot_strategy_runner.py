@@ -14,6 +14,7 @@ from app.schemas.market_scanner import (
 from app.schemas.trading_bot_strategy import (
     TradingBotStrategyContext,
     TradingBotStrategyDecision,
+    TradingBotStrategyState,
 )
 from app.strategies.registry import (
     TradingBotStrategyRegistry,
@@ -60,6 +61,9 @@ class TradingBotStrategyRunner:
         *,
         bot,
         ticker: MarketTickerSnapshot,
+        state: (
+            TradingBotStrategyState | None
+        ) = None,
     ) -> TradingBotStrategyDecision:
         strategy = self.registry.get(
             bot.strategy_type
@@ -81,6 +85,11 @@ class TradingBotStrategyRunner:
             config=config,
             ticker=ticker,
             evaluated_at=self.clock(),
+            state=(
+                state
+                if state is not None
+                else TradingBotStrategyState()
+            ),
         )
         decision = await strategy.evaluate(
             context

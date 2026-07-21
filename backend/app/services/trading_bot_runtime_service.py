@@ -44,6 +44,9 @@ from app.services.paper_trading_engine import (
 from app.services.trading_bot_strategy_runner import (
     TradingBotStrategyRunner,
 )
+from app.services.trading_bot_strategy_state_service import (
+    TradingBotStrategyStateService,
+)
 from app.workers.automation_worker import (
     AutomationWorker,
 )
@@ -60,10 +63,18 @@ PaperEngineFactory = Callable[
     [Session],
     PaperTradingEngine,
 ]
+StrategyStateServiceFactory = Callable[
+    [Session],
+    TradingBotStrategyStateService,
+]
 RuntimeClock = Callable[[], datetime]
 class TradingBotRuntimeService:
     JOB_TYPE = "TRADING_BOT_TICK"
     INTERVAL_SECONDS = 60.0
+    STATEFUL_STRATEGIES = frozenset({
+        "DCA",
+        "GRID",
+    })
     def __init__(
         self,
         *,
@@ -88,6 +99,10 @@ class TradingBotRuntimeService:
         ) = None,
         paper_engine_factory: (
             PaperEngineFactory | None
+        ) = None,
+        strategy_state_service_factory: (
+            StrategyStateServiceFactory
+            | None
         ) = None,
         clock: RuntimeClock | None = None,
     ):
@@ -123,6 +138,10 @@ class TradingBotRuntimeService:
                     clock=self.clock,
                 )
             )
+        )
+        self.strategy_state_service_factory = (
+            strategy_state_service_factory
+            or TradingBotStrategyStateService
         )
         self.strategy_runner = (
             strategy_runner
@@ -452,10 +471,37 @@ class TradingBotRuntimeService:
                     account_repository
                 ),
             )
+            strategy_arguments = {
+                "bot": bot,
+                "ticker": ticker,
+            }
+            strategy_type = (
+                str(bot.strategy_type)
+                .strip()
+                .upper()
+            )
+            if (
+                strategy_type
+                in self.STATEFUL_STRATEGIES
+            ):
+                state_service = (
+                    self
+                    .strategy_state_service_factory(
+                        db
+                    )
+                )
+                strategy_arguments["state"] = (
+                    state_service
+                    .build_from_paper_ledger(
+                        bot=bot,
+                        current_price=(
+                            ticker.last_price
+                        ),
+                    )
+                )
             decision = await (
                 self.strategy_runner.run(
-                    bot=bot,
-                    ticker=ticker,
+                    **strategy_arguments
                 )
             )
             paper_execution = None

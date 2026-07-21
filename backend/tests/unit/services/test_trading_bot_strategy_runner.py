@@ -62,9 +62,15 @@ def test_default_registry_contains_rule_based():
         TradingBotStrategyRegistry
         .default()
     )
-    assert registry.list_types() == [
+    assert (
         "RULE_BASED"
-    ]
+        in registry.list_types()
+    )
+    assert (
+        registry.get("RULE_BASED")
+        .strategy_type
+        == "RULE_BASED"
+    )
 def test_duplicate_strategy_is_rejected():
     registry = TradingBotStrategyRegistry(
         strategies=[

@@ -4,6 +4,12 @@ from collections.abc import (
 from app.strategies.base import (
     TradingBotStrategy,
 )
+from app.strategies.dca import (
+    DcaTradingStrategy,
+)
+from app.strategies.grid import (
+    GridTradingStrategy,
+)
 from app.strategies.rule_based import (
     RuleBasedTradingStrategy,
 )
@@ -78,5 +84,7 @@ class TradingBotStrategyRegistry:
         return cls(
             strategies=[
                 RuleBasedTradingStrategy(),
+                DcaTradingStrategy(),
+                GridTradingStrategy(),
             ]
         )

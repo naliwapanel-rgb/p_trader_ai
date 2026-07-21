@@ -20,6 +20,10 @@ from app.schemas.trading_bot_backtest import (
     TradingBotBacktestExecutionResult,
     TradingBotBacktestRequest,
 )
+from app.schemas.trading_bot_strategy import (
+    TradingBotStrategyPositionState,
+    TradingBotStrategyState,
+)
 from app.services.backtest_market_replay_service import (
     BacktestMarketReplayService,
 )
@@ -51,6 +55,10 @@ class _BacktestPortfolio:
     total_fees: Decimal
     position: _BacktestPosition | None
 class BacktestExecutionEngine:
+    STATEFUL_STRATEGIES = frozenset({
+        "DCA",
+        "GRID",
+    })
     def __init__(
         self,
         *,
@@ -712,6 +720,117 @@ class BacktestExecutionEngine:
             )
         )
         return outcome, order, None
+    @classmethod
+    def _strategy_state(
+        cls,
+        *,
+        portfolio: _BacktestPortfolio,
+        orders: list[
+            BacktestOrderFill
+        ],
+        completed_trades: list[
+            BacktestCompletedTrade
+        ],
+    ) -> TradingBotStrategyState:
+        last_order = (
+            orders[-1]
+            if orders
+            else None
+        )
+        position = portfolio.position
+        position_state = None
+        if position is not None:
+            cycle_start = 0
+            for index, order in enumerate(
+                orders
+            ):
+                if (
+                    order.position_effect
+                    == "CLOSE"
+                ):
+                    cycle_start = index + 1
+            entry_orders = [
+                order
+                for order
+                in orders[cycle_start:]
+                if order.position_effect
+                in {
+                    "OPEN",
+                    "INCREASE",
+                }
+            ]
+            latest_entry = (
+                entry_orders[-1]
+                if entry_orders
+                else None
+            )
+            position_state = (
+                TradingBotStrategyPositionState(
+                    side=position.side,
+                    quantity=float(
+                        position.quantity
+                    ),
+                    average_entry_price=float(
+                        position
+                        .average_entry_price
+                    ),
+                    current_price=float(
+                        position.current_price
+                    ),
+                    position_value_usd=float(
+                        position.quantity
+                        * position.current_price
+                    ),
+                    unrealized_pnl_usd=float(
+                        position.unrealized_pnl
+                    ),
+                    entry_count=max(
+                        len(entry_orders),
+                        1,
+                    ),
+                    last_entry_price=(
+                        latest_entry
+                        .reference_price
+                        if latest_entry
+                        is not None
+                        else float(
+                            position
+                            .average_entry_price
+                        )
+                    ),
+                    opened_at=(
+                        position.opened_at
+                    ),
+                    last_entry_at=(
+                        latest_entry.filled_at
+                        if latest_entry
+                        is not None
+                        else position.opened_at
+                    ),
+                )
+            )
+        return TradingBotStrategyState(
+            order_count=len(orders),
+            completed_trade_count=len(
+                completed_trades
+            ),
+            last_order_action=(
+                last_order.side
+                if last_order is not None
+                else None
+            ),
+            last_order_reference_price=(
+                last_order.reference_price
+                if last_order is not None
+                else None
+            ),
+            last_order_at=(
+                last_order.filled_at
+                if last_order is not None
+                else None
+            ),
+            position=position_state,
+        )
     async def run(
         self,
         *,
@@ -780,9 +899,30 @@ class BacktestExecutionEngine:
                         frame.candle.closed_at
                     )
                 )
+                strategy_arguments = {
+                    "bot": bot,
+                    "ticker": frame.ticker,
+                }
+                strategy_type = (
+                    str(bot.strategy_type)
+                    .strip()
+                    .upper()
+                )
+                if (
+                    strategy_type
+                    in self.STATEFUL_STRATEGIES
+                ):
+                    strategy_arguments[
+                        "state"
+                    ] = self._strategy_state(
+                        portfolio=portfolio,
+                        orders=all_orders,
+                        completed_trades=(
+                            completed_trades
+                        ),
+                    )
                 decision = await runner.run(
-                    bot=bot,
-                    ticker=frame.ticker,
+                    **strategy_arguments
                 )
                 (
                     outcome,

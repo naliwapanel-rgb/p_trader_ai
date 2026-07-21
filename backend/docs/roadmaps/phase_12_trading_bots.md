@@ -10,8 +10,8 @@ remaining implementation can continue consistently.
 - 12F - Paper Trading Engine
 - 12G - Bot Trade History and Performance Tracking
 - 12H - Backtesting Engine
-## Remaining
 - 12I - DCA and Grid Bot Strategies
+## Remaining
 - 12J - Trend, Mean-Reversion and Scalping Strategies
 - 12K - Arbitrage Bot Integration
 - 12L - Strategy Builder and Copy-Trading Foundation
@@ -195,3 +195,65 @@ Backtest execution operates entirely in memory. It must not create
 or modify paper-trading accounts, paper positions, paper orders or
 live exchange orders. The database is used only to authenticate the
 user and retrieve the user-owned trading-bot configuration.
+
+## Phase 12I scope
+Phase 12I introduces deterministic DCA and Grid trading strategies
+using the existing strategy, paper-trading and backtesting
+architecture.
+Included:
+- Validated DCA strategy configuration
+- LONG and SHORT DCA directions
+- Configurable DCA entry spacing
+- Configurable DCA maximum-entry limits
+- Optional initial DCA market-change threshold
+- DCA take-profit exits
+- Validated Grid strategy configuration
+- Configurable Grid lower and upper prices
+- Configurable Grid levels
+- Equally spaced Grid price levels
+- LONG and SHORT Grid directions
+- Configurable Grid maximum-entry limits
+- Grid take-profit exits
+- Market-spread filters
+- Minimum-turnover filters
+- Deterministic strategy confidence
+- Structured decision metadata
+- Stateful strategy execution context
+- Current position state
+- Entry-count state
+- Last-entry-price state
+- Last-order state
+- Completed-trade count state
+- Paper-ledger strategy-state derivation
+- Runtime strategy-state integration
+- In-memory backtest strategy-state derivation
+- DCA backtesting
+- Grid backtesting
+- Existing RULE_BASED strategy compatibility
+- Strategy-registry integration
+Excluded:
+- Live exchange order placement
+- Live position modification
+- New database tables
+- New Alembic migrations
+- Persistent strategy-state tables
+- Arbitrage strategy logic
+- Trend strategy logic
+- Mean-reversion strategy logic
+- Scalping strategy logic
+- Copy trading
+- Automatic parameter optimization
+- Walk-forward optimization
+- New runtime schedulers
+## Phase 12I strategy types
+- `DCA`
+- `GRID`
+## Phase 12I safety boundary
+DCA and Grid strategies generate validated BUY, SELL or HOLD
+decisions only. They must not import or invoke live exchange order
+services, paper-trading repositories, database sessions or runtime
+schedulers.
+Runtime state is derived from the isolated paper-trading ledger.
+Backtest state is derived from the current in-memory backtest
+portfolio and order history. Strategy evaluation does not directly
+modify either state.
