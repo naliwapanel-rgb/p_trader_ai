@@ -157,6 +157,30 @@ class TradingBotRepository:
         self.db.commit()
         self.db.refresh(bot)
         return bot
+    def save_lifecycle(
+        self,
+        *,
+        bot: TradingBot,
+        status: str,
+        updated_at: datetime,
+        started_at=...,
+        stopped_at=...,
+        last_error=...,
+        last_run_at=...,
+    ) -> TradingBot:
+        bot.status = status
+        bot.updated_at = updated_at
+        if started_at is not ...:
+            bot.started_at = started_at
+        if stopped_at is not ...:
+            bot.stopped_at = stopped_at
+        if last_error is not ...:
+            bot.last_error = last_error
+        if last_run_at is not ...:
+            bot.last_run_at = last_run_at
+        self.db.commit()
+        self.db.refresh(bot)
+        return bot
     def delete(
         self,
         bot: TradingBot,

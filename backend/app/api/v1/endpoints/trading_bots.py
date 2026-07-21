@@ -17,9 +17,13 @@ from app.models.user import (
 )
 from app.schemas.trading_bot import (
     TradingBotCreateRequest,
+    TradingBotLifecycleActionResult,
     TradingBotResponse,
     TradingBotStatus,
     TradingBotUpdateRequest,
+)
+from app.services.trading_bot_lifecycle_service import (
+    TradingBotLifecycleService,
 )
 from app.services.trading_bot_service import (
     TradingBotService,
@@ -169,5 +173,125 @@ async def delete_my_trading_bot(
         message=(
             "Trading bot deleted "
             "successfully"
+        ),
+    )
+@router.post("/{bot_id}/prepare")
+async def prepare_my_trading_bot(
+    bot_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    result = (
+        TradingBotLifecycleService(db)
+        .prepare_bot(
+            current_user=current_user,
+            bot_id=bot_id,
+        )
+    )
+    return success_response(
+        message=(
+            "Trading bot prepared "
+            "successfully"
+        ),
+        data=result.model_dump(
+            mode="json"
+        ),
+    )
+@router.post("/{bot_id}/start")
+async def start_my_trading_bot(
+    bot_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    result = (
+        TradingBotLifecycleService(db)
+        .start_bot(
+            current_user=current_user,
+            bot_id=bot_id,
+        )
+    )
+    return success_response(
+        message=(
+            "Trading bot started "
+            "successfully"
+        ),
+        data=result.model_dump(
+            mode="json"
+        ),
+    )
+@router.post("/{bot_id}/pause")
+async def pause_my_trading_bot(
+    bot_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    result = (
+        TradingBotLifecycleService(db)
+        .pause_bot(
+            current_user=current_user,
+            bot_id=bot_id,
+        )
+    )
+    return success_response(
+        message=(
+            "Trading bot paused "
+            "successfully"
+        ),
+        data=result.model_dump(
+            mode="json"
+        ),
+    )
+@router.post("/{bot_id}/resume")
+async def resume_my_trading_bot(
+    bot_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    result = (
+        TradingBotLifecycleService(db)
+        .resume_bot(
+            current_user=current_user,
+            bot_id=bot_id,
+        )
+    )
+    return success_response(
+        message=(
+            "Trading bot resumed "
+            "successfully"
+        ),
+        data=result.model_dump(
+            mode="json"
+        ),
+    )
+@router.post("/{bot_id}/stop")
+async def stop_my_trading_bot(
+    bot_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    result = (
+        TradingBotLifecycleService(db)
+        .stop_bot(
+            current_user=current_user,
+            bot_id=bot_id,
+        )
+    )
+    return success_response(
+        message=(
+            "Trading bot stopped "
+            "successfully"
+        ),
+        data=result.model_dump(
+            mode="json"
         ),
     )

@@ -356,3 +356,18 @@ class TradingBotResponse(
     model_config = ConfigDict(
         from_attributes=True
     )
+TradingBotLifecycleAction = Literal[
+    "PREPARE",
+    "START",
+    "PAUSE",
+    "RESUME",
+    "STOP",
+]
+class TradingBotLifecycleActionResult(
+    BaseModel
+):
+    action: TradingBotLifecycleAction
+    previous_status: TradingBotStatus
+    status: TradingBotStatus
+    changed: bool
+    bot: TradingBotResponse
