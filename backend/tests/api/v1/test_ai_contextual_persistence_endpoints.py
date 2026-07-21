@@ -331,6 +331,7 @@ def test_persisted_metadata_remains_safe(
         "include_user_context": True,
         "include_conversation_history": True,
         "conversation_history_limit": 12,
+        "use_external_provider": False,
     }
     assert (
         exchange_data

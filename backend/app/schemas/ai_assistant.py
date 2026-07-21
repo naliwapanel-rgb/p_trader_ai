@@ -44,6 +44,7 @@ AIArbitrageOpportunityType = Literal[
     "TRIANGULAR",
 ]
 AIDataSource = Literal[
+    "EXTERNAL_AI",
     "CONVERSATION_HISTORY",
     "USER_QUERY",
     "MARKET_SCANNER",
@@ -74,6 +75,8 @@ class AIQuestionRequest(BaseModel):
 class AIAssistantRequest(
     AIQuestionRequest
 ):
+    use_external_provider: bool = False
+
     include_conversation_history: bool = True
     conversation_history_limit: int = Field(
         default=12,

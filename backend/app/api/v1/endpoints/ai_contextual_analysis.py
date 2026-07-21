@@ -1,6 +1,15 @@
+from inspect import (
+    isawaitable,
+)
 from fastapi import (
     APIRouter,
     Depends,
+)
+from app.ai.providers.base import (
+    BaseAIProvider,
+)
+from app.ai.providers.factory import (
+    AIProviderFactory,
 )
 from app.api.dependencies import (
     get_current_user,
@@ -34,6 +43,9 @@ from app.services.ai_conversation_aware_analysis_service import (
 from app.services.ai_conversation_service import (
     AIConversationService,
 )
+from app.services.ai_external_orchestration_service import (
+    AIExternalOrchestrationService,
+)
 from app.utils.responses import (
     success_response,
 )
@@ -41,6 +53,8 @@ router = APIRouter(
     prefix="/ai-assistant",
     tags=["AI Assistant"],
 )
+def get_ai_provider() -> BaseAIProvider:
+    return AIProviderFactory.create()
 def get_context_aware_analysis_service(
     context_builder: (
         AIContextBuilderService
@@ -52,7 +66,10 @@ def get_context_aware_analysis_service(
     ) = Depends(
         get_ai_conversation_service
     ),
-) -> AIConversationAwareAnalysisService:
+    provider: BaseAIProvider = Depends(
+        get_ai_provider
+    ),
+) -> AIExternalOrchestrationService:
     contextual_service = (
         AIContextAwareAnalysisService(
             context_builder=(
@@ -63,7 +80,7 @@ def get_context_aware_analysis_service(
             ),
         )
     )
-    return (
+    conversation_aware_service = (
         AIConversationAwareAnalysisService(
             contextual_service=(
                 contextual_service
@@ -73,9 +90,32 @@ def get_context_aware_analysis_service(
             ),
         )
     )
+    return AIExternalOrchestrationService(
+        deterministic_service=(
+            conversation_aware_service
+        ),
+        provider=provider,
+    )
+def _provider_audit_metadata(
+    result,
+) -> dict:
+    for section in result.sections:
+        if (
+            section.title
+            == "External AI Provider"
+        ):
+            return dict(
+                section.metrics
+            )
+    return {}
 def _assistant_metadata(
     result,
 ) -> dict:
+    provider_audit = (
+        _provider_audit_metadata(
+            result
+        )
+    )
     return {
         "status": result.status,
         "execution_allowed": False,
@@ -85,6 +125,19 @@ def _assistant_metadata(
         "execution_enabled": False,
         "provider": (
             result.metadata.provider
+        ),
+        "model_name": (
+            result.metadata.model_name
+        ),
+        "provider_latency_ms": (
+            provider_audit.get(
+                "latency_ms"
+            )
+        ),
+        "provider_error_code": (
+            provider_audit.get(
+                "error_code"
+            )
         ),
         "confidence_score": (
             result.metadata.confidence_score
@@ -125,6 +178,9 @@ def _user_metadata(
             data
             .conversation_history_limit
         ),
+        "use_external_provider": (
+            data.use_external_provider
+        ),
     }
 @router.post("/contextual-query")
 async def answer_contextual_query(
@@ -133,7 +189,7 @@ async def answer_contextual_query(
         get_current_user
     ),
     service: (
-        AIConversationAwareAnalysisService
+        AIExternalOrchestrationService
     ) = Depends(
         get_context_aware_analysis_service
     ),
@@ -143,10 +199,18 @@ async def answer_contextual_query(
         get_ai_conversation_service
     ),
 ):
-    result = service.analyze(
-        current_user=current_user,
-        request=data,
+    analysis_candidate = (
+        service.analyze(
+            current_user=current_user,
+            request=data,
+        )
     )
+    if isawaitable(
+        analysis_candidate
+    ):
+        result = await analysis_candidate
+    else:
+        result = analysis_candidate
     response_data = result.model_dump(
         mode="json"
     )
