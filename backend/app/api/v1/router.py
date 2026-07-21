@@ -1,5 +1,6 @@
-﻿from fastapi import APIRouter
+from fastapi import APIRouter
 from app.api.v1.endpoints import (
+    ai_assistant,
     alerts,
     arbitrage,
     auth,
@@ -44,3 +45,4 @@ api_router.include_router(
 api_router.include_router(
     automation.router
 )
+api_router.include_router(ai_assistant.router)

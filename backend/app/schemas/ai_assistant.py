@@ -1,4 +1,4 @@
-﻿from typing import (
+from typing import (
     Any,
     Literal,
 )
@@ -10,6 +10,9 @@ from pydantic import (
 )
 from app.schemas.market_scanner import (
     MarketCategory,
+)
+from app.schemas.portfolio_sync import (
+    PortfolioSyncSnapshotResponse,
 )
 from app.schemas.risk_management import (
     PreTradeRiskResult,
@@ -597,3 +600,12 @@ class AIAnalysisResponse(BaseModel):
                 "analysis_type TRADE_PLAN"
             )
         return self
+class AIMarketAnalysisAPIRequest(BaseModel):
+    request: AIMarketAnalysisRequest
+    tickers: list[dict[str, Any]] = Field(
+        default_factory=list,
+        max_length=100,
+    )
+class AIPortfolioAnalysisAPIRequest(BaseModel):
+    request: AIPortfolioAnalysisRequest
+    snapshot: PortfolioSyncSnapshotResponse
