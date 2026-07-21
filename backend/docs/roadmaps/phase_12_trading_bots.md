@@ -9,8 +9,8 @@ remaining implementation can continue consistently.
 - 12E - Strategy Interface and Rule-Based Runner
 - 12F - Paper Trading Engine
 - 12G - Bot Trade History and Performance Tracking
-## Remaining
 - 12H - Backtesting Engine
+## Remaining
 - 12I - DCA and Grid Bot Strategies
 - 12J - Trend, Mean-Reversion and Scalping Strategies
 - 12K - Arbitrage Bot Integration
@@ -140,3 +140,58 @@ Excluded:
 Phase 12G is read-only. It calculates performance from the isolated
 paper-trading ledger and must not create orders, modify positions,
 change account balances or invoke live exchange services.
+
+## Phase 12H scope
+Phase 12H introduces deterministic, in-memory backtesting for
+persisted trading-bot configurations.
+Included:
+- Validated timezone-aware historical candle input
+- OHLC range and chronological-sequence validation
+- Overlapping-candle rejection
+- Maximum historical-series size validation
+- Deterministic chronological market replay
+- Trailing 24-hour market context
+- No-lookahead market-data handling
+- Strategy evaluation through the existing strategy runner
+- Warmup-frame handling
+- In-memory simulated portfolio state
+- Long and short position execution
+- Same-direction position increases
+- Opposite-direction position closes
+- Adverse slippage and trading fees
+- Risk-based position sizing
+- Maximum-position-value enforcement
+- Minimum-order-notional rejection
+- Optional forced position closure at the end of a backtest
+- Order-fill ledger
+- Completed-trade ledger
+- Per-frame portfolio snapshots
+- Equity-curve generation
+- Peak-equity tracking
+- Maximum drawdown in USD and percentage
+- Net trade performance metrics
+- Win rate
+- Average win and loss
+- Profit factor
+- Total return
+- Authenticated and user-scoped backtest API
+- OpenAPI route registration
+Excluded:
+- Persistent backtest database tables
+- Persistent backtest result storage
+- Automatic historical-data downloads
+- Live exchange execution
+- Paper-trading ledger modifications
+- Background scheduling
+- Strategy optimization
+- Parameter searching
+- Walk-forward optimization
+- DCA, Grid and Arbitrage strategy logic
+- Copy trading
+## Phase 12H API endpoint
+- `POST /trading-bots/{bot_id}/backtest`
+## Phase 12H safety boundary
+Backtest execution operates entirely in memory. It must not create
+or modify paper-trading accounts, paper positions, paper orders or
+live exchange orders. The database is used only to authenticate the
+user and retrieve the user-owned trading-bot configuration.
