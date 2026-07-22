@@ -11,12 +11,22 @@ from fastapi.exceptions import (
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )
-from app.api.v1.router import api_router
-from app.core.config import get_settings
+from app.api.v1.router import (
+    api_router,
+)
+from app.core.config import (
+    get_settings,
+)
 from app.core.exceptions import (
     general_exception_handler,
     http_exception_handler,
     validation_exception_handler,
+)
+from app.core.security.runtime import (
+    validate_runtime_security,
+)
+from app.database.session import (
+    engine,
 )
 from app.middleware.request_logger import (
     request_logger_middleware,
@@ -24,34 +34,84 @@ from app.middleware.request_logger import (
 from app.services.automation_runtime_service import (
     AutomationRuntime,
 )
+from app.services.database_recovery_service import (
+    DatabaseRecoveryService,
+)
 settings = get_settings()
+validate_runtime_security(
+    settings
+)
 @asynccontextmanager
 async def lifespan(
     application: FastAPI,
 ):
+    database_recovery_service = (
+        DatabaseRecoveryService(
+            engine
+        )
+    )
     runtime = AutomationRuntime()
     application.state.automation_runtime = (
         runtime
     )
-    await runtime.start()
-    trading_bot_restore = (
-        await runtime
-        .bot_runtime_service
-        .restore_running_bots()
-    )
-    application.state.trading_bot_restore = (
-        trading_bot_restore
-    )
+    database_prepared = False
     try:
+        database_recovery = (
+            database_recovery_service
+            .prepare_startup()
+        )
+        database_prepared = True
+        application.state.database_recovery = (
+            database_recovery
+        )
+        await runtime.start()
+        trading_bot_restore = (
+            await runtime
+            .bot_runtime_service
+            .restore_running_bots()
+        )
+        application.state.trading_bot_restore = (
+            trading_bot_restore
+        )
         yield
     finally:
-        await runtime.stop(
-            drain=True
-        )
+        try:
+            await runtime.stop(
+                drain=True
+            )
+        finally:
+            if database_prepared:
+                try:
+                    checkpoint = (
+                        database_recovery_service
+                        .checkpoint()
+                    )
+                    (
+                        application
+                        .state
+                        .database_checkpoint
+                    ) = checkpoint
+                except Exception as error:
+                    (
+                        application
+                        .state
+                        .database_checkpoint
+                    ) = None
+                    (
+                        application
+                        .state
+                        .database_checkpoint_error
+                    ) = (
+                        error
+                        .__class__
+                        .__name__
+                    )
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description=settings.app_description,
+    description=(
+        settings.app_description
+    ),
     debug=settings.debug,
     lifespan=lifespan,
 )
@@ -87,7 +147,9 @@ app.include_router(
 async def root():
     return {
         "status": "online",
-        "application": settings.app_name,
+        "application": (
+            settings.app_name
+        ),
         "version": settings.app_version,
         "environment": (
             settings.environment

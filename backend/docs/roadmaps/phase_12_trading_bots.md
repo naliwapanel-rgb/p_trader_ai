@@ -13,9 +13,10 @@ remaining implementation can continue consistently.
 - 12I - DCA and Grid Bot Strategies
 - 12J - Trend, Mean-Reversion and Scalping Strategies
 - 12K - Arbitrage Bot Integration
-## Remaining
-- 12L - Strategy Builder and Copy-Trading Foundation (Completed)
+- 12L - Strategy Builder and Copy-Trading Foundation
 - 12M - Security, Recovery and Integration Testing
+## Remaining
+- None. Phase 12 is complete.
 ## Phase 12D scope
 Phase 12D connects persisted trading-bot lifecycle state to the
 existing in-memory automation runtime.
@@ -476,3 +477,63 @@ It must not import or invoke live exchange-order placement,
 position-management, withdrawal or fund-transfer services.
 The internal mirroring service is not exposed as a public API
 endpoint in Phase 12L.
+## Phase 12M scope
+Phase 12M hardens the completed trading-bot platform and validates
+its security, database-recovery and ownership boundaries.
+Included:
+- Runtime security-configuration validation
+- Production rejection of insecure default secrets
+- Fernet encryption-key validation
+- Supported JWT-algorithm validation
+- REST and WebSocket token-subject validation
+- Non-positive and malformed token-subject rejection
+- Inactive-user login and resource-access rejection
+- SQLite foreign-key enforcement on every connection
+- SQLite busy-timeout configuration
+- SQLite WAL journal mode for file databases
+- Startup quick-integrity checks
+- Startup foreign-key violation checks
+- Runtime cleanup after startup restoration failure
+- Passive WAL checkpoint during graceful shutdown
+- Credential and token redaction
+- Sanitized validation and HTTP exception responses
+- Generic unhandled-error responses
+- Request correlation identifiers
+- Request-target query-string sanitization
+- Logging without request bodies or authorization headers
+- Real-database ownership-isolation integration testing
+- Exchange-account credential-response isolation
+- Strategy-template visibility isolation
+- Copy-trading follower ownership isolation
+- Permanent Phase 12 security-boundary regression tests
+Excluded:
+- Refresh-token issuance or token revocation
+- Password-reset or email-verification workflows
+- Automatic secret or encryption-key rotation
+- Automated off-site database backup and restoration
+- Distributed database failover
+- API rate limiting or web-application firewall controls
+- Live copy-trading execution
+- Enabling new live exchange-order execution paths
+## Phase 12M safety boundary
+Application startup must fail closed when production security
+configuration is insecure or database integrity validation fails.
+Authentication failures must not become internal-server errors.
+Inactive users must not receive new access tokens or access
+authenticated resources.
+Credentials, passwords, authorization values and tokens must not
+appear in request logs, exception logs, validation responses,
+strategy templates or copy-trading subscriptions.
+Database recovery in Phase 12M consists of integrity validation,
+foreign-key enforcement, WAL configuration, controlled runtime
+cleanup and graceful checkpointing. It does not claim to provide
+off-site backup or disaster-recovery infrastructure.
+Phase 12M does not enable live copy trading, fund transfers,
+withdrawals, cross-user exchange access or new live order paths.
+Copy-trading decision mirroring remains paper-only and internal.
+## Phase 12 completion
+Phases 12A through 12M are complete. The trading-bot foundation now
+includes persistence, lifecycle control, scheduling, deterministic
+strategies, paper trading, reporting, backtesting, reusable strategy
+templates, paper-only copy-trading foundations, security hardening,
+database recovery checks and end-to-end ownership isolation.
