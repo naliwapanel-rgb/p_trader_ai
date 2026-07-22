@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     arbitrage,
     auth,
     automation,
+    copy_trading,
     exchange_accounts,
     exchange_connections,
     exchange_trading,
@@ -16,6 +17,7 @@ from app.api.v1.endpoints import (
     notification_preferences,
     portfolios,
     risk_management,
+    strategy_templates,
     trading_bot_backtest,
     trading_bot_history,
     trading_bots,
@@ -53,6 +55,12 @@ api_router.include_router(
 )
 api_router.include_router(
     trading_bots.router
+)
+api_router.include_router(
+    strategy_templates.router
+)
+api_router.include_router(
+    copy_trading.router
 )
 api_router.include_router(
     market_scanner.router

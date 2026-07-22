@@ -14,7 +14,7 @@ remaining implementation can continue consistently.
 - 12J - Trend, Mean-Reversion and Scalping Strategies
 - 12K - Arbitrage Bot Integration
 ## Remaining
-- 12L - Strategy Builder and Copy-Trading Foundation
+- 12L - Strategy Builder and Copy-Trading Foundation (Completed)
 - 12M - Security, Recovery and Integration Testing
 ## Phase 12D scope
 Phase 12D connects persisted trading-bot lifecycle state to the
@@ -430,3 +430,49 @@ foundation must not import or invoke live exchange-order services,
 paper-trading execution services, database repositories or the
 authenticated exchange factory.
 Phase 12K remains evaluation-only.
+## Phase 12L scope
+Phase 12L introduces reusable strategy templates and a safe
+copy-trading foundation.
+Included:
+- Persistent owner-scoped strategy templates
+- Draft, published and archived template states
+- Private and public visibility
+- Registered-strategy configuration validation
+- Template version tracking
+- Safe trading-bot creation from templates
+- Independent follower-owned trading bots
+- Persistent copy-trading subscriptions
+- Active, paused and stopped subscription states
+- Public published templates as copy sources
+- Strict template-to-bot compatibility validation
+- Paper-only execution-mode enforcement
+- Internal paper-decision mirroring
+- Duplicate-decision protection
+- Stale template-version protection
+- Per-follower failure isolation
+- Authenticated template and subscription APIs
+- OpenAPI and regression coverage
+Excluded:
+- Live copy trading
+- Cross-user exchange-account access
+- API-key or secret copying
+- Balance, position or order copying
+- Automatic fund transfers
+- Leader control over follower risk settings
+- Anonymous template publishing
+- Public decision-mirroring endpoints
+- Performance rankings or social feeds
+- Revenue sharing or subscription payments
+## Phase 12L safety boundary
+A strategy template contains strategy, market, risk and safety
+configuration only. It must not contain exchange credentials,
+runtime state, balances, positions, orders or performance history.
+Each follower owns an independent destination trading bot and must
+supply any exchange account from their own account inventory.
+Template-created and copy-subscribed bots must enable both
+`paper_trading` and `dry_run`.
+Decision mirroring writes only to the isolated paper-trading ledger.
+It must not import or invoke live exchange-order placement,
+position-management, withdrawal or fund-transfer services.
+The internal mirroring service is not exposed as a public API
+endpoint in Phase 12L.
