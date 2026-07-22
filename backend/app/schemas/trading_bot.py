@@ -15,6 +15,9 @@ from pydantic import (
 TradingBotStrategyType = Literal[
     "RULE_BASED",
     "MOMENTUM",
+    "TREND",
+    "MEAN_REVERSION",
+    "SCALPING",
     "GRID",
     "DCA",
     "ARBITRAGE",

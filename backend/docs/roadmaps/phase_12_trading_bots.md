@@ -11,8 +11,8 @@ remaining implementation can continue consistently.
 - 12G - Bot Trade History and Performance Tracking
 - 12H - Backtesting Engine
 - 12I - DCA and Grid Bot Strategies
-## Remaining
 - 12J - Trend, Mean-Reversion and Scalping Strategies
+## Remaining
 - 12K - Arbitrage Bot Integration
 - 12L - Strategy Builder and Copy-Trading Foundation
 - 12M - Security, Recovery and Integration Testing
@@ -257,3 +257,93 @@ Runtime state is derived from the isolated paper-trading ledger.
 Backtest state is derived from the current in-memory backtest
 portfolio and order history. Strategy evaluation does not directly
 modify either state.
+
+## Phase 12J scope
+Phase 12J introduces deterministic Trend, Mean-Reversion and
+Scalping strategies using bounded historical market context.
+Included:
+- `TREND` strategy type
+- `MEAN_REVERSION` strategy type
+- `SCALPING` strategy type
+- Validated Trend configuration
+- Fast and slow exponential moving averages
+- Trend momentum confirmation
+- EMA-separation filtering
+- Bullish and bearish Trend signals
+- Position-aware Trend reversal exits
+- Validated Mean-Reversion configuration
+- Simple moving averages
+- Population standard deviation
+- Statistical z-score calculation
+- Relative Strength Index calculation
+- Oversold and overbought confirmation
+- Position-aware statistical-mean exits
+- Validated Scalping configuration
+- Short-term EMA alignment
+- Short-term momentum confirmation
+- RSI Scalping confirmation
+- Average True Range calculation
+- Minimum and maximum volatility filters
+- Position-aware Scalping reversal exits
+- LONG, SHORT and BOTH direction modes
+- Spread filters
+- Turnover filters
+- Deterministic confidence calculations
+- Structured decision metadata
+- Bounded market-history schemas
+- Maximum 500 strategy-history samples
+- Strict chronological-history validation
+- Future-data rejection
+- Latest-price consistency validation
+- Optional history support in the strategy runner
+- Process-local runtime ticker history
+- Bot-scoped runtime history
+- Duplicate-timestamp replacement
+- Backwards-time rejection
+- Runtime history clearing
+- Runtime paper-position state integration
+- Historical-candle backtest integration
+- No-lookahead backtest history
+- Intraday indicator warmup
+- Existing 24-hour warmup compatibility
+- In-memory Trend backtesting
+- In-memory Mean-Reversion backtesting
+- In-memory Scalping backtesting
+- Existing RULE_BASED compatibility
+- Existing DCA compatibility
+- Existing Grid compatibility
+- Strategy-registry integration
+Excluded:
+- Live exchange order placement
+- Live exchange position modification
+- Persistent runtime-history tables
+- Persistent indicator tables
+- Persistent backtest results
+- New database tables
+- New Alembic migrations
+- Automatic market-history downloads
+- Machine-learning prediction
+- Automatic parameter optimization
+- Walk-forward optimization
+- Arbitrage strategy logic
+- Strategy-builder functionality
+- Copy trading
+- New runtime schedulers
+## Phase 12J strategy types
+- `TREND`
+- `MEAN_REVERSION`
+- `SCALPING`
+## Phase 12J market-history boundary
+Strategy history is strictly bounded to 500 samples.
+Runtime history is process-local and isolated by user, bot, symbol,
+category and timeframe. It is not persisted to the database.
+Backtesting uses only the current candle and earlier candles.
+Future candles are never included in strategy evaluation.
+## Phase 12J safety boundary
+Trend, Mean-Reversion and Scalping strategies generate validated
+BUY, SELL or HOLD decisions only. They must not import or invoke
+database repositories, live exchange-order services, paper-trading
+engines or runtime schedulers.
+The existing runtime service may pass strategy decisions to the
+isolated paper-trading engine only when the bot has paper trading
+enabled. Phase 12J does not enable live exchange execution.

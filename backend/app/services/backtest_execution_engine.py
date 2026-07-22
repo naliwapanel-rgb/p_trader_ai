@@ -21,6 +21,7 @@ from app.schemas.trading_bot_backtest import (
     TradingBotBacktestRequest,
 )
 from app.schemas.trading_bot_strategy import (
+    TradingBotMarketSample,
     TradingBotStrategyPositionState,
     TradingBotStrategyState,
 )
@@ -58,7 +59,16 @@ class BacktestExecutionEngine:
     STATEFUL_STRATEGIES = frozenset({
         "DCA",
         "GRID",
+        "TREND",
+        "MEAN_REVERSION",
+        "SCALPING",
     })
+    HISTORY_STRATEGIES = frozenset({
+        "TREND",
+        "MEAN_REVERSION",
+        "SCALPING",
+    })
+    MAX_HISTORY_SAMPLES = 500
     def __init__(
         self,
         *,
@@ -721,6 +731,56 @@ class BacktestExecutionEngine:
         )
         return outcome, order, None
     @classmethod
+    def _market_history(
+        cls,
+        *,
+        data: TradingBotBacktestRequest,
+        current_index: int,
+    ) -> list[
+        TradingBotMarketSample
+    ]:
+        first_index = max(
+            0,
+            current_index
+            - cls.MAX_HISTORY_SAMPLES
+            + 1,
+        )
+        candles = data.candles[
+            first_index:
+            current_index + 1
+        ]
+        return [
+            TradingBotMarketSample(
+                observed_at=(
+                    candle.closed_at
+                ),
+                open_price=(
+                    candle.open_price
+                ),
+                high_price=(
+                    candle.high_price
+                ),
+                low_price=(
+                    candle.low_price
+                ),
+                close_price=(
+                    candle.close_price
+                ),
+                bid_price=(
+                    candle.close_price
+                ),
+                ask_price=(
+                    candle.close_price
+                ),
+                volume=candle.volume,
+                turnover_usd=(
+                    candle.turnover_usd
+                ),
+                source="CANDLE",
+            )
+            for candle in candles
+        ]
+    @classmethod
     def _strategy_state(
         cls,
         *,
@@ -876,6 +936,11 @@ class BacktestExecutionEngine:
         steps = []
         warmup_count = 0
         evaluated_count = 0
+        strategy_type = (
+            str(bot.strategy_type)
+            .strip()
+            .upper()
+        )
         for index, frame in enumerate(
             frames
         ):
@@ -889,7 +954,15 @@ class BacktestExecutionEngine:
             step_orders = []
             outcomes = []
             decision = None
-            if not frame.warmup_complete:
+            strategy_warmup_complete = (
+                frame.warmup_complete
+                or (
+                    strategy_type
+                    in self.HISTORY_STRATEGIES
+                    and index > 0
+                )
+            )
+            if not strategy_warmup_complete:
                 warmup_count += 1
                 outcomes.append("WARMUP")
             else:
@@ -903,11 +976,16 @@ class BacktestExecutionEngine:
                     "bot": bot,
                     "ticker": frame.ticker,
                 }
-                strategy_type = (
-                    str(bot.strategy_type)
-                    .strip()
-                    .upper()
-                )
+                if (
+                    strategy_type
+                    in self.HISTORY_STRATEGIES
+                ):
+                    strategy_arguments[
+                        "market_history"
+                    ] = self._market_history(
+                        data=data,
+                        current_index=index,
+                    )
                 if (
                     strategy_type
                     in self.STATEFUL_STRATEGIES

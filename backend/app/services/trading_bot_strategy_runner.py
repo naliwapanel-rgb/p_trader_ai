@@ -12,6 +12,7 @@ from app.schemas.market_scanner import (
     MarketTickerSnapshot,
 )
 from app.schemas.trading_bot_strategy import (
+    TradingBotMarketSample,
     TradingBotStrategyContext,
     TradingBotStrategyDecision,
     TradingBotStrategyState,
@@ -61,6 +62,12 @@ class TradingBotStrategyRunner:
         *,
         bot,
         ticker: MarketTickerSnapshot,
+        market_history: (
+            list[
+                TradingBotMarketSample
+            ]
+            | None
+        ) = None,
         state: (
             TradingBotStrategyState | None
         ) = None,
@@ -84,6 +91,9 @@ class TradingBotStrategyRunner:
             timeframe=bot.timeframe,
             config=config,
             ticker=ticker,
+            market_history=list(
+                market_history or []
+            ),
             evaluated_at=self.clock(),
             state=(
                 state

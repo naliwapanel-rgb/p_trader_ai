@@ -41,6 +41,9 @@ from app.services.market_scanner_service import (
 from app.services.paper_trading_engine import (
     PaperTradingEngine,
 )
+from app.services.trading_bot_runtime_market_history_service import (
+    TradingBotRuntimeMarketHistoryService,
+)
 from app.services.trading_bot_strategy_runner import (
     TradingBotStrategyRunner,
 )
@@ -74,6 +77,14 @@ class TradingBotRuntimeService:
     STATEFUL_STRATEGIES = frozenset({
         "DCA",
         "GRID",
+        "TREND",
+        "MEAN_REVERSION",
+        "SCALPING",
+    })
+    HISTORY_STRATEGIES = frozenset({
+        "TREND",
+        "MEAN_REVERSION",
+        "SCALPING",
     })
     def __init__(
         self,
@@ -102,6 +113,10 @@ class TradingBotRuntimeService:
         ) = None,
         strategy_state_service_factory: (
             StrategyStateServiceFactory
+            | None
+        ) = None,
+        market_history_service: (
+            TradingBotRuntimeMarketHistoryService
             | None
         ) = None,
         clock: RuntimeClock | None = None,
@@ -142,6 +157,10 @@ class TradingBotRuntimeService:
         self.strategy_state_service_factory = (
             strategy_state_service_factory
             or TradingBotStrategyStateService
+        )
+        self.market_history_service = (
+            market_history_service
+            or TradingBotRuntimeMarketHistoryService()
         )
         self.strategy_runner = (
             strategy_runner
@@ -480,6 +499,26 @@ class TradingBotRuntimeService:
                 .strip()
                 .upper()
             )
+            if (
+                strategy_type
+                in self.HISTORY_STRATEGIES
+            ):
+                market_history = []
+                if ticker.last_price > 0:
+                    market_history = (
+                        self
+                        .market_history_service
+                        .append_ticker(
+                            bot=bot,
+                            ticker=ticker,
+                            observed_at=(
+                                self.clock()
+                            ),
+                        )
+                    )
+                strategy_arguments[
+                    "market_history"
+                ] = market_history
             if (
                 strategy_type
                 in self.STATEFUL_STRATEGIES

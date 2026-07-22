@@ -10,6 +10,15 @@ from app.strategies.dca import (
 from app.strategies.grid import (
     GridTradingStrategy,
 )
+from app.strategies.trend import (
+    TrendTradingStrategy,
+)
+from app.strategies.mean_reversion import (
+    MeanReversionTradingStrategy,
+)
+from app.strategies.scalping import (
+    ScalpingTradingStrategy,
+)
 from app.strategies.rule_based import (
     RuleBasedTradingStrategy,
 )
@@ -86,5 +95,8 @@ class TradingBotStrategyRegistry:
                 RuleBasedTradingStrategy(),
                 DcaTradingStrategy(),
                 GridTradingStrategy(),
+                TrendTradingStrategy(),
+                MeanReversionTradingStrategy(),
+                ScalpingTradingStrategy(),
             ]
         )
