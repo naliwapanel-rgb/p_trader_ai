@@ -8,6 +8,9 @@ from datetime import (
 from typing import (
     Any,
 )
+from app.schemas.arbitrage import (
+    ArbitrageMarketQuote,
+)
 from app.schemas.market_scanner import (
     MarketTickerSnapshot,
 )
@@ -62,6 +65,12 @@ class TradingBotStrategyRunner:
         *,
         bot,
         ticker: MarketTickerSnapshot,
+        arbitrage_quotes: (
+            list[
+                ArbitrageMarketQuote
+            ]
+            | None
+        ) = None,
         market_history: (
             list[
                 TradingBotMarketSample
@@ -91,6 +100,9 @@ class TradingBotStrategyRunner:
             timeframe=bot.timeframe,
             config=config,
             ticker=ticker,
+            arbitrage_quotes=list(
+                arbitrage_quotes or []
+            ),
             market_history=list(
                 market_history or []
             ),

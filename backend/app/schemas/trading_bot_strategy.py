@@ -13,6 +13,9 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from app.schemas.arbitrage import (
+    ArbitrageMarketQuote,
+)
 from app.schemas.market_scanner import (
     MarketCategory,
     MarketTickerSnapshot,
@@ -330,6 +333,230 @@ class ScalpingStrategyConfig(
                 "below maximum_atr_percent"
             )
         return self
+class ArbitrageRuntimeMarketConfig(
+    BaseModel
+):
+    exchange: str = Field(
+        min_length=2,
+        max_length=50,
+    )
+    symbol: str = Field(
+        min_length=3,
+        max_length=50,
+    )
+    base_asset: str = Field(
+        min_length=1,
+        max_length=20,
+    )
+    quote_asset: str = Field(
+        min_length=1,
+        max_length=20,
+    )
+    fee_rate_percent: float = Field(
+        default=0.0,
+        ge=0,
+        lt=100,
+    )
+    slippage_percent: float = Field(
+        default=0.0,
+        ge=0,
+        lt=100,
+    )
+    fixed_buy_cost: float = Field(
+        default=0.0,
+        ge=0,
+    )
+    fixed_sell_cost: float = Field(
+        default=0.0,
+        ge=0,
+    )
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    @field_validator(
+        "exchange",
+        "symbol",
+        "base_asset",
+        "quote_asset",
+    )
+    @classmethod
+    def normalize_market_identifier(
+        cls,
+        value: str,
+    ) -> str:
+        normalized = (
+            value.strip().upper()
+        )
+        if not normalized:
+            raise ValueError(
+                "Arbitrage market identifiers "
+                "cannot be blank"
+            )
+        return normalized
+    @model_validator(mode="after")
+    def validate_market_assets(self):
+        if (
+            self.base_asset
+            == self.quote_asset
+        ):
+            raise ValueError(
+                "base_asset and quote_asset "
+                "must be different"
+            )
+        return self
+class ArbitrageStrategyConfig(
+    BaseModel
+):
+    opportunity_type: Literal[
+        "CROSS_EXCHANGE",
+        "TRIANGULAR",
+    ] = "TRIANGULAR"
+    starting_asset: str = Field(
+        default="USDT",
+        min_length=1,
+        max_length=20,
+    )
+    starting_amount: float = Field(
+        default=100.0,
+        gt=0,
+        le=1_000_000_000,
+    )
+    minimum_profit_percent: float = Field(
+        default=0.1,
+        ge=0,
+        le=100,
+    )
+    exchanges: list[str] = Field(
+        default_factory=lambda: [
+            "BYBIT",
+        ],
+        min_length=1,
+        max_length=10,
+    )
+    symbols: list[str] = Field(
+        default_factory=list,
+        max_length=100,
+    )
+    markets: list[
+        ArbitrageRuntimeMarketConfig
+    ] = Field(
+        default_factory=list,
+        max_length=500,
+    )
+    maximum_quote_age_ms: (
+        int | None
+    ) = Field(
+        default=5000,
+        ge=0,
+        le=3_600_000,
+    )
+    maximum_time_skew_ms: (
+        int | None
+    ) = Field(
+        default=1000,
+        ge=0,
+        le=3_600_000,
+    )
+    require_full_liquidity: bool = True
+    maximum_opportunities: int = Field(
+        default=10,
+        ge=1,
+        le=200,
+    )
+    evaluation_only: Literal[
+        True
+    ] = True
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    @field_validator(
+        "starting_asset",
+    )
+    @classmethod
+    def normalize_starting_asset(
+        cls,
+        value: str,
+    ) -> str:
+        normalized = (
+            value.strip().upper()
+        )
+        if not normalized:
+            raise ValueError(
+                "starting_asset cannot be blank"
+            )
+        return normalized
+    @field_validator(
+        "exchanges",
+        "symbols",
+    )
+    @classmethod
+    def normalize_identifier_list(
+        cls,
+        values: list[str],
+    ) -> list[str]:
+        normalized = []
+        for value in values:
+            identifier = (
+                value.strip().upper()
+            )
+            if not identifier:
+                raise ValueError(
+                    "Arbitrage identifiers "
+                    "cannot be blank"
+                )
+            if identifier not in normalized:
+                normalized.append(
+                    identifier
+                )
+        return normalized
+    @model_validator(mode="after")
+    def validate_arbitrage_mode(self):
+        if (
+            self.opportunity_type
+            == "TRIANGULAR"
+            and len(self.exchanges) != 1
+        ):
+            raise ValueError(
+                "TRIANGULAR arbitrage requires "
+                "exactly one exchange"
+            )
+        if (
+            self.opportunity_type
+            == "CROSS_EXCHANGE"
+            and len(self.exchanges) < 2
+        ):
+            raise ValueError(
+                "CROSS_EXCHANGE arbitrage "
+                "requires at least two exchanges"
+            )
+        configured_exchanges = set(
+            self.exchanges
+        )
+        market_keys = set()
+        for market in self.markets:
+            market_key = (
+                market.exchange,
+                market.symbol,
+            )
+            if market_key in market_keys:
+                raise ValueError(
+                    "Arbitrage runtime markets "
+                    "cannot contain duplicate "
+                    "exchange and symbol entries"
+                )
+            market_keys.add(
+                market_key
+            )
+            if (
+                market.exchange
+                not in configured_exchanges
+            ):
+                raise ValueError(
+                    "Arbitrage runtime market "
+                    "exchange must be included "
+                    "in exchanges"
+                )
+        return self
 TradingBotStrategyPositionSide = Literal[
     "LONG",
     "SHORT",
@@ -640,6 +867,12 @@ class TradingBotStrategyContext(
         default_factory=dict
     )
     ticker: MarketTickerSnapshot
+    arbitrage_quotes: list[
+        ArbitrageMarketQuote
+    ] = Field(
+        default_factory=list,
+        max_length=500,
+    )
     market_history: list[
         TradingBotMarketSample
     ] = Field(
@@ -682,6 +915,49 @@ class TradingBotStrategyContext(
                 "Ticker category does not match "
                 "the trading bot category"
             )
+        if self.arbitrage_quotes:
+            if (
+                self.evaluated_at.tzinfo
+                is None
+                or self.evaluated_at
+                .utcoffset()
+                is None
+            ):
+                raise ValueError(
+                    "evaluated_at must include "
+                    "a timezone when arbitrage "
+                    "quotes are provided"
+                )
+            evaluated_at_ms = int(
+                self.evaluated_at
+                .astimezone(UTC)
+                .timestamp()
+                * 1000
+            )
+            quote_keys = set()
+            for quote in self.arbitrage_quotes:
+                quote_key = (
+                    quote.exchange,
+                    quote.symbol,
+                )
+                if quote_key in quote_keys:
+                    raise ValueError(
+                        "Arbitrage quotes cannot "
+                        "contain duplicate exchange "
+                        "and symbol markets"
+                    )
+                quote_keys.add(
+                    quote_key
+                )
+                if (
+                    quote.observed_at_ms > 0
+                    and quote.observed_at_ms
+                    > evaluated_at_ms
+                ):
+                    raise ValueError(
+                        "Arbitrage quotes cannot "
+                        "contain future observations"
+                    )
         previous_timestamp = None
         if self.market_history:
             if (

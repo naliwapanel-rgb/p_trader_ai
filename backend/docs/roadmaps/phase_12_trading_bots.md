@@ -12,8 +12,8 @@ remaining implementation can continue consistently.
 - 12H - Backtesting Engine
 - 12I - DCA and Grid Bot Strategies
 - 12J - Trend, Mean-Reversion and Scalping Strategies
-## Remaining
 - 12K - Arbitrage Bot Integration
+## Remaining
 - 12L - Strategy Builder and Copy-Trading Foundation
 - 12M - Security, Recovery and Integration Testing
 ## Phase 12D scope
@@ -347,3 +347,86 @@ engines or runtime schedulers.
 The existing runtime service may pass strategy decisions to the
 isolated paper-trading engine only when the bot has paper trading
 enabled. Phase 12J does not enable live exchange execution.
+## Phase 12K scope
+Phase 12K integrates deterministic Arbitrage evaluation into the
+existing trading-bot strategy and runtime architecture.
+Included:
+- `ARBITRAGE` trading-bot strategy type
+- Validated Arbitrage strategy configuration
+- `TRIANGULAR` opportunity mode
+- `CROSS_EXCHANGE` opportunity mode
+- Starting-asset and starting-amount configuration
+- Minimum-profit threshold configuration
+- Exchange and symbol filters
+- Quote-age and quote-time-skew limits
+- Full-liquidity requirements
+- Explicit runtime market definitions
+- Fee, slippage and fixed-cost configuration
+- Bounded Arbitrage quote context
+- Duplicate quote rejection
+- Future quote rejection
+- Strategy-runner Arbitrage quote forwarding
+- Existing Arbitrage profit-service reuse
+- Existing cross-exchange scanner reuse
+- Existing triangular scanner reuse
+- Deterministic opportunity ranking
+- Structured opportunity metadata
+- Evaluation-only `HOLD` decisions
+- Insufficient-quote safe handling
+- Bybit triangular public ticker integration
+- Public market-data provider registry
+- Cross-exchange provider foundation
+- Injectable secondary public market-data clients
+- Cross-exchange ticker-batch validation
+- Cross-exchange quote construction
+- Triangular runtime quote forwarding
+- Cross-exchange runtime quote forwarding
+- Provider failure runtime error handling
+- Existing authenticated Arbitrage API compatibility
+- Existing runtime strategy compatibility
+- Existing DCA, Grid, Trend, Mean-Reversion and Scalping compatibility
+Excluded:
+- Live Arbitrage order placement
+- Atomic multi-leg exchange execution
+- Paper-ledger Arbitrage position creation
+- Persistent Arbitrage opportunity tables
+- Persistent Arbitrage quote tables
+- New database tables
+- New Alembic migrations
+- Authenticated exchange-client use for public quote collection
+- Automatic balance transfer between exchanges
+- Capital rebalancing
+- Arbitrage inventory management
+- Exchange withdrawal or deposit automation
+- Flash-loan execution
+- Decentralized-exchange transaction execution
+- Historical Arbitrage backtesting
+- Automatic parameter optimization
+- Strategy-builder functionality
+- Copy trading
+## Phase 12K strategy type
+- `ARBITRAGE`
+## Phase 12K opportunity types
+- `TRIANGULAR`
+- `CROSS_EXCHANGE`
+## Phase 12K runtime boundary
+Triangular runtime evaluation uses normalized public spot ticker
+data from the bot's configured exchange.
+Cross-exchange runtime evaluation uses a public market-data
+provider registry. The bot's primary exchange batch is reused,
+while additional exchange batches are obtained only through
+explicitly registered public market-data providers.
+A missing or invalid secondary provider is handled by the existing
+runtime error boundary. No authenticated trading client is used to
+collect Arbitrage quote context.
+## Phase 12K execution boundary
+Arbitrage strategies always return `HOLD`.
+Detected opportunities are included as structured evaluation
+metadata. They are not translated into ordinary directional paper
+orders because a two-leg or three-leg Arbitrage cycle cannot be
+represented accurately by the existing one-symbol paper ledger.
+The Arbitrage strategy, quote services and public provider
+foundation must not import or invoke live exchange-order services,
+paper-trading execution services, database repositories or the
+authenticated exchange factory.
+Phase 12K remains evaluation-only.

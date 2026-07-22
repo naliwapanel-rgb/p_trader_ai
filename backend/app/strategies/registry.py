@@ -4,6 +4,9 @@ from collections.abc import (
 from app.strategies.base import (
     TradingBotStrategy,
 )
+from app.strategies.arbitrage import (
+    ArbitrageTradingStrategy,
+)
 from app.strategies.dca import (
     DcaTradingStrategy,
 )
@@ -98,5 +101,6 @@ class TradingBotStrategyRegistry:
                 TrendTradingStrategy(),
                 MeanReversionTradingStrategy(),
                 ScalpingTradingStrategy(),
+                ArbitrageTradingStrategy(),
             ]
         )

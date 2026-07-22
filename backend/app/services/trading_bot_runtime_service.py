@@ -24,7 +24,11 @@ from app.schemas.automation import (
     AutomationIntervalSchedule,
 )
 from app.schemas.market_scanner import (
+    MarketTickerBatch,
     MarketTickerSnapshot,
+)
+from app.schemas.trading_bot_strategy import (
+    ArbitrageStrategyConfig,
 )
 from app.schemas.trading_bot_runtime import (
     TradingBotRuntimeRestoreResult,
@@ -40,6 +44,12 @@ from app.services.market_scanner_service import (
 )
 from app.services.paper_trading_engine import (
     PaperTradingEngine,
+)
+from app.services.trading_bot_arbitrage_quote_service import (
+    TradingBotArbitrageQuoteService,
+)
+from app.services.trading_bot_cross_exchange_arbitrage_market_service import (
+    TradingBotCrossExchangeArbitrageMarketService,
 )
 from app.services.trading_bot_runtime_market_history_service import (
     TradingBotRuntimeMarketHistoryService,
@@ -119,6 +129,14 @@ class TradingBotRuntimeService:
             TradingBotRuntimeMarketHistoryService
             | None
         ) = None,
+        arbitrage_quote_service: (
+            TradingBotArbitrageQuoteService
+            | None
+        ) = None,
+        cross_exchange_market_service: (
+            TradingBotCrossExchangeArbitrageMarketService
+            | None
+        ) = None,
         clock: RuntimeClock | None = None,
     ):
         self.scheduler = scheduler
@@ -161,6 +179,16 @@ class TradingBotRuntimeService:
         self.market_history_service = (
             market_history_service
             or TradingBotRuntimeMarketHistoryService()
+        )
+        self.arbitrage_quote_service = (
+            arbitrage_quote_service
+            or TradingBotArbitrageQuoteService()
+        )
+        self.cross_exchange_market_service = (
+            cross_exchange_market_service
+            or (
+                TradingBotCrossExchangeArbitrageMarketService()
+            )
         )
         self.strategy_runner = (
             strategy_runner
@@ -381,14 +409,18 @@ class TradingBotRuntimeService:
                 ),
             )
         )
-    async def _load_ticker(
+    async def _load_market_context(
         self,
         *,
         bot,
         account_repository: (
             ExchangeAccountRepository
         ),
-    ) -> MarketTickerSnapshot:
+    ) -> tuple[
+        MarketTickerSnapshot,
+        Any,
+        MarketTickerBatch,
+    ]:
         if bot.exchange_account_id is None:
             raise ValueError(
                 "Trading bot requires an "
@@ -420,7 +452,7 @@ class TradingBotRuntimeService:
         )
         if exchange_name != "BYBIT":
             raise ValueError(
-                "Phase 12E strategy market "
+                "Phase 12 strategy market "
                 "context currently supports "
                 "BYBIT only"
             )
@@ -433,14 +465,41 @@ class TradingBotRuntimeService:
                 ),
             )
         )
-        symbol = bot.symbol.strip().upper()
+        symbol = (
+            bot.symbol
+            .strip()
+            .upper()
+        )
         for ticker in batch.tickers:
             if ticker.symbol == symbol:
-                return ticker
+                return (
+                    ticker,
+                    account,
+                    batch,
+                )
         raise ValueError(
             "Trading bot market ticker "
             f"was not found for {symbol}"
         )
+    async def _load_ticker(
+        self,
+        *,
+        bot,
+        account_repository: (
+            ExchangeAccountRepository
+        ),
+    ) -> MarketTickerSnapshot:
+        (
+            ticker,
+            _,
+            _,
+        ) = await self._load_market_context(
+            bot=bot,
+            account_repository=(
+                account_repository
+            ),
+        )
+        return ticker
     async def execute_tick(
         self,
         payload: dict[str, Any],
@@ -484,7 +543,11 @@ class TradingBotRuntimeService:
                 return result.model_dump(
                     mode="json"
                 )
-            ticker = await self._load_ticker(
+            (
+                ticker,
+                account,
+                market_batch,
+            ) = await self._load_market_context(
                 bot=bot,
                 account_repository=(
                     account_repository
@@ -499,6 +562,58 @@ class TradingBotRuntimeService:
                 .strip()
                 .upper()
             )
+            if (
+                strategy_type
+                == "ARBITRAGE"
+            ):
+                arbitrage_config = (
+                    ArbitrageStrategyConfig
+                    .model_validate(
+                        dict(
+                            bot.strategy_config
+                            or {}
+                        )
+                    )
+                )
+                if (
+                    arbitrage_config
+                    .opportunity_type
+                    == "CROSS_EXCHANGE"
+                ):
+                    exchange_batches = await (
+                        self
+                        .cross_exchange_market_service
+                        .load_batches(
+                            bot=bot,
+                            account=account,
+                            primary_batch=(
+                                market_batch
+                            ),
+                        )
+                    )
+                    arbitrage_quotes = (
+                        self
+                        .arbitrage_quote_service
+                        .build_cross_exchange_quotes(
+                            bot=bot,
+                            batches=(
+                                exchange_batches
+                            ),
+                        )
+                    )
+                else:
+                    arbitrage_quotes = (
+                        self
+                        .arbitrage_quote_service
+                        .build_quotes(
+                            bot=bot,
+                            account=account,
+                            batch=market_batch,
+                        )
+                    )
+                strategy_arguments[
+                    "arbitrage_quotes"
+                ] = arbitrage_quotes
             if (
                 strategy_type
                 in self.HISTORY_STRATEGIES
@@ -544,7 +659,11 @@ class TradingBotRuntimeService:
                 )
             )
             paper_execution = None
-            if bot.paper_trading:
+            if (
+                bot.paper_trading
+                and strategy_type
+                != "ARBITRAGE"
+            ):
                 paper_engine = (
                     self.paper_engine_factory(
                         db
