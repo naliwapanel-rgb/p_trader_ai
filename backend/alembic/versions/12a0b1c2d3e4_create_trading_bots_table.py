@@ -92,13 +92,13 @@ def upgrade() -> None:
         sa.Column(
             "paper_trading",
             sa.Boolean(),
-            server_default=sa.text("1"),
+            server_default=sa.true(),
             nullable=False,
         ),
         sa.Column(
             "dry_run",
             sa.Boolean(),
-            server_default=sa.text("1"),
+            server_default=sa.true(),
             nullable=False,
         ),
         sa.Column(

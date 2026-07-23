@@ -2,6 +2,9 @@ from urllib.parse import urlparse
 from cryptography.fernet import (
     Fernet,
 )
+from sqlalchemy.engine import (
+    make_url,
+)
 from app.core.config import (
     DEVELOPMENT_ENCRYPTION_KEY,
     DEVELOPMENT_SECRET_KEY,
@@ -47,21 +50,15 @@ def _plain_secret(
         "get_secret_value",
         None,
     )
-    if callable(
-        get_secret_value
-    ):
+    if callable(get_secret_value):
         return str(
             get_secret_value()
         ).strip()
-    return str(
-        value
-    ).strip()
+    return str(value).strip()
 def _validate_hardened_cors_origin(
     origin: str,
 ) -> None:
-    parsed = urlparse(
-        origin
-    )
+    parsed = urlparse(origin)
     if (
         parsed.scheme.lower()
         != "https"
@@ -84,8 +81,7 @@ def _validate_hardened_cors_origin(
         or ""
     ).lower()
     if (
-        hostname
-        in LOCAL_CORS_HOSTNAMES
+        hostname in LOCAL_CORS_HOSTNAMES
         or hostname.endswith(
             ".localhost"
         )
@@ -95,10 +91,7 @@ def _validate_hardened_cors_origin(
             "allowed in production"
         )
     if (
-        parsed.path not in {
-            "",
-            "/",
-        }
+        parsed.path not in {"", "/"}
         or parsed.params
         or parsed.query
         or parsed.fragment
@@ -138,6 +131,15 @@ def validate_runtime_security(
         raise RuntimeError(
             "DATABASE_URL cannot be blank"
         )
+    try:
+        database_backend = (
+            make_url(database_url)
+            .get_backend_name()
+        )
+    except Exception as error:
+        raise RuntimeError(
+            "DATABASE_URL is invalid"
+        ) from error
     if algorithm not in (
         SUPPORTED_JWT_ALGORITHMS
     ):
@@ -224,16 +226,12 @@ def validate_runtime_security(
             "Production ENCRYPTION_KEY is "
             "insecure"
         )
-    if not (
-        settings.backend_cors_origins
-    ):
+    if not settings.backend_cors_origins:
         raise RuntimeError(
             "At least one production CORS "
             "origin is required"
         )
-    if "*" in (
-        settings.backend_cors_origins
-    ):
+    if "*" in settings.backend_cors_origins:
         raise RuntimeError(
             "Wildcard CORS origins are not "
             "allowed in production"
@@ -244,11 +242,14 @@ def validate_runtime_security(
         _validate_hardened_cors_origin(
             origin
         )
+    if database_backend != "postgresql":
+        raise RuntimeError(
+            "Staging and production "
+            "require PostgreSQL"
+        )
     if settings.ai_external_enabled:
         parsed_ai_url = urlparse(
-            settings
-            .ai_base_url
-            .strip()
+            settings.ai_base_url.strip()
         )
         if (
             parsed_ai_url.scheme.lower()

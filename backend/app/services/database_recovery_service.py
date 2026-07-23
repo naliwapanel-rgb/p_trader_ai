@@ -33,9 +33,7 @@ class DatabaseRecoveryService:
         raw_connection = (
             self.engine.raw_connection()
         )
-        cursor = (
-            raw_connection.cursor()
-        )
+        cursor = raw_connection.cursor()
         try:
             if self.is_file_sqlite:
                 row = cursor.execute(
@@ -49,39 +47,53 @@ class DatabaseRecoveryService:
                 if journal_mode != "wal":
                     raise RuntimeError(
                         "SQLite WAL journal "
-                        "mode could not be "
-                        "enabled"
+                        "mode could not be enabled"
                     )
                 cursor.execute(
-                    (
-                        "PRAGMA "
-                        "wal_autocheckpoint=1000"
-                    )
+                    "PRAGMA "
+                    "wal_autocheckpoint=1000"
                 )
             raw_connection.commit()
         finally:
             cursor.close()
             raw_connection.close()
+    def _inspect_non_sqlite(
+        self,
+    ) -> DatabaseRecoverySnapshot:
+        try:
+            with self.engine.connect() as connection:
+                probe = (
+                    connection
+                    .exec_driver_sql(
+                        "SELECT 1"
+                    )
+                    .scalar_one()
+                )
+        except Exception as error:
+            raise RuntimeError(
+                "Database startup validation "
+                "failed"
+            ) from error
+        healthy = probe == 1
+        return DatabaseRecoverySnapshot(
+            backend=(
+                self.engine.dialect.name
+            ),
+            healthy=healthy,
+            integrity_check=(
+                "CONNECTION_OK"
+                if healthy
+                else "CONNECTION_FAILED"
+            ),
+        )
     def inspect(
         self,
     ) -> DatabaseRecoverySnapshot:
         if not self.is_sqlite:
             return (
-                DatabaseRecoverySnapshot(
-                    backend=(
-                        self.engine
-                        .dialect
-                        .name
-                    ),
-                    healthy=True,
-                    integrity_check=(
-                        "NOT_APPLICABLE"
-                    ),
-                )
+                self._inspect_non_sqlite()
             )
-        with self.engine.connect() as (
-            connection
-        ):
+        with self.engine.connect() as connection:
             foreign_keys = int(
                 connection.exec_driver_sql(
                     "PRAGMA foreign_keys"
@@ -156,36 +168,31 @@ class DatabaseRecoveryService:
     def checkpoint(
         self,
     ) -> (
-        DatabaseCheckpointResult | None
+        DatabaseCheckpointResult
+        | None
     ):
         if not self.is_file_sqlite:
             return None
         raw_connection = (
             self.engine.raw_connection()
         )
-        cursor = (
-            raw_connection.cursor()
-        )
+        cursor = raw_connection.cursor()
         try:
             row = cursor.execute(
-                (
-                    "PRAGMA "
-                    "wal_checkpoint(PASSIVE)"
-                )
+                "PRAGMA "
+                "wal_checkpoint(PASSIVE)"
             ).fetchone()
             if row is None:
                 raise RuntimeError(
                     "SQLite WAL checkpoint "
                     "did not return a result"
                 )
-            return (
-                DatabaseCheckpointResult(
-                    busy=int(row[0]),
-                    log_frames=int(row[1]),
-                    checkpointed_frames=(
-                        int(row[2])
-                    ),
-                )
+            return DatabaseCheckpointResult(
+                busy=int(row[0]),
+                log_frames=int(row[1]),
+                checkpointed_frames=int(
+                    row[2]
+                ),
             )
         finally:
             cursor.close()
