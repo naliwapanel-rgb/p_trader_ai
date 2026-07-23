@@ -1,0 +1,32 @@
+# Normalize text files in the repository.
+* text=auto
+# Application and deployment files use LF.
+*.py text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.example text eol=lf
+.env.example text eol=lf
+.env.*.example text eol=lf
+.gitignore text eol=lf
+Dockerfile text eol=lf
+*.sh text eol=lf
+# Windows command files retain Windows endings.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# Common binary formats.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
