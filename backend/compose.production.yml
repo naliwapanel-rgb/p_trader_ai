@@ -24,7 +24,7 @@ services:
       start_period: 20s
 
   backend:
-    image: p-trader-ai-backend:phase-13c
+    image: p-trader-ai-backend:phase-13d
 
     build:
       context: .
@@ -43,6 +43,8 @@ services:
       - APP_DESCRIPTION=Backend API for P-TRADER AI
       - ENVIRONMENT=production
       - DEBUG=false
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-1}
+      - AUTOMATION_RUNTIME_ENABLED=${AUTOMATION_RUNTIME_ENABLED:-true}
 
       - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - DATABASE_POOL_SIZE=5

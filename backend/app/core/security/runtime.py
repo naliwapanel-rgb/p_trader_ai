@@ -200,6 +200,14 @@ def validate_runtime_security(
                 "AI_MODEL_NAME is required "
                 "when external AI is enabled"
             )
+    if (
+        settings.automation_runtime_enabled
+        and settings.web_concurrency != 1
+    ):
+        raise RuntimeError(
+            "The in-memory automation runtime "
+            "requires WEB_CONCURRENCY=1"
+        )
     if environment not in (
         HARDENED_ENVIRONMENTS
     ):

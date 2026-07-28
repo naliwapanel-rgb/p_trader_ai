@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     )
     environment: str = "development"
     debug: bool = True
+    web_concurrency: int = Field(
+        default=1,
+        ge=1,
+        le=16,
+    )
+    automation_runtime_enabled: bool = True
     exchange_trading_enabled: bool = False
     exchange_dry_run: bool = True
     max_order_quantity: float = 1.0

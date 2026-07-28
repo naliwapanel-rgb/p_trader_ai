@@ -50,7 +50,11 @@ async def lifespan(
             engine
         )
     )
-    runtime = AutomationRuntime()
+    runtime = (
+        AutomationRuntime()
+        if settings.automation_runtime_enabled
+        else None
+    )
     application.state.automation_runtime = (
         runtime
     )
@@ -64,21 +68,25 @@ async def lifespan(
         application.state.database_recovery = (
             database_recovery
         )
-        await runtime.start()
-        trading_bot_restore = (
-            await runtime
-            .bot_runtime_service
-            .restore_running_bots()
-        )
+        if runtime is not None:
+            await runtime.start()
+            trading_bot_restore = (
+                await runtime
+                .bot_runtime_service
+                .restore_running_bots()
+            )
+        else:
+            trading_bot_restore = None
         application.state.trading_bot_restore = (
             trading_bot_restore
         )
         yield
     finally:
         try:
-            await runtime.stop(
-                drain=True
-            )
+            if runtime is not None:
+                await runtime.stop(
+                    drain=True
+                )
         finally:
             if database_prepared:
                 try:
