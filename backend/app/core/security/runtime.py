@@ -217,6 +217,26 @@ def validate_runtime_security(
             "DEBUG must be disabled in "
             "production"
         )
+    if not settings.trusted_hosts:
+        raise RuntimeError(
+            "At least one trusted host is "
+            "required in production"
+        )
+    if "*" in settings.trusted_hosts:
+        raise RuntimeError(
+            "Wildcard trusted hosts are not "
+            "allowed in production"
+        )
+    if not settings.security_headers_enabled:
+        raise RuntimeError(
+            "Security headers must be enabled "
+            "in production"
+        )
+    if settings.api_docs_enabled:
+        raise RuntimeError(
+            "API documentation must be "
+            "disabled in hardened environments"
+        )
     if (
         secret_key.lower()
         in INSECURE_SECRET_KEYS

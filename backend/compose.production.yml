@@ -22,8 +22,11 @@ services:
       retries: 10
       start_period: 20s
 
+    networks:
+      - database_net
+
   backend:
-    image: p-trader-ai-backend:phase-13d
+    image: p-trader-ai-backend:phase-13f
 
     build:
       context: .
@@ -31,6 +34,16 @@ services:
 
     restart: unless-stopped
     init: true
+    read_only: true
+
+    security_opt:
+      - no-new-privileges:true
+
+    cap_drop:
+      - ALL
+
+    tmpfs:
+      - /tmp:size=64m,mode=1777
 
     depends_on:
       postgres:
@@ -56,6 +69,9 @@ services:
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=60
       - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:?required}
+      - TRUSTED_HOSTS=${TRUSTED_HOSTS:?required}
+      - API_DOCS_ENABLED=${API_DOCS_ENABLED:?required}
+      - SECURITY_HEADERS_ENABLED=${SECURITY_HEADERS_ENABLED:?required}
 
       - EXCHANGE_TRADING_ENABLED=false
       - EXCHANGE_DRY_RUN=true
@@ -71,11 +87,18 @@ services:
     expose:
       - "8000"
 
+    networks:
+      - application_net
+      - database_net
+
     stop_grace_period: 45s
 
   nginx:
     image: nginx:1.30.4-alpine
     restart: unless-stopped
+
+    security_opt:
+      - no-new-privileges:true
 
     depends_on:
       backend:
@@ -102,7 +125,18 @@ services:
       retries: 5
       start_period: 10s
 
+    networks:
+      - application_net
+
     stop_grace_period: 15s
+
+networks:
+  application_net:
+    name: p_trader_ai_application_net
+
+  database_net:
+    name: p_trader_ai_database_net
+    internal: true
 
 volumes:
   postgres_data:

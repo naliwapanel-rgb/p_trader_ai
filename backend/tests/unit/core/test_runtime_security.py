@@ -20,6 +20,9 @@ def build_settings(
             .decode()
         ),
         "algorithm": "HS256",
+        "trusted_hosts": ["api.example.com"],
+        "security_headers_enabled": True,
+        "api_docs_enabled": False,
         (
             "access_token_"
             "expire_minutes"
@@ -109,6 +112,66 @@ def test_production_wildcard_cors_is_rejected():
     with pytest.raises(
         RuntimeError,
         match="Wildcard CORS",
+    ):
+        validate_runtime_security(
+            settings
+        )
+
+
+def test_production_requires_trusted_host():
+    settings = build_settings(
+        environment="production",
+        debug=False,
+        trusted_hosts=[],
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="At least one trusted host",
+    ):
+        validate_runtime_security(
+            settings
+        )
+
+
+def test_production_rejects_wildcard_trusted_host():
+    settings = build_settings(
+        environment="production",
+        debug=False,
+        trusted_hosts=["*"],
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="Wildcard trusted hosts",
+    ):
+        validate_runtime_security(
+            settings
+        )
+
+
+def test_production_requires_security_headers():
+    settings = build_settings(
+        environment="production",
+        debug=False,
+        security_headers_enabled=False,
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="Security headers must be enabled",
+    ):
+        validate_runtime_security(
+            settings
+        )
+
+
+def test_production_disables_api_documentation():
+    settings = build_settings(
+        environment="production",
+        debug=False,
+        api_docs_enabled=True,
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="API documentation must be disabled",
     ):
         validate_runtime_security(
             settings

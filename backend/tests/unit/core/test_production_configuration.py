@@ -30,6 +30,9 @@ def build_hardened_settings(
             .decode("utf-8")
         ),
         "algorithm": "HS256",
+        "trusted_hosts": ["api.example.com"],
+        "security_headers_enabled": True,
+        "api_docs_enabled": False,
         "access_token_expire_minutes": 60,
         "backend_cors_origins": [
             "https://app.example.com",

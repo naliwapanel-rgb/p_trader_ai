@@ -52,4 +52,4 @@ HEALTHCHECK \
 
 ENTRYPOINT ["/usr/local/bin/p-trader-entrypoint"]
 
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \"${WEB_CONCURRENCY:-1}\""]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \"${WEB_CONCURRENCY:-1}\" --no-server-header"]

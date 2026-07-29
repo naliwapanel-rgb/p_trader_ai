@@ -27,6 +27,9 @@ def hardened_settings(
         "backend_cors_origins": [
             "https://app.example.com",
         ],
+        "trusted_hosts": ["api.example.com"],
+        "security_headers_enabled": True,
+        "api_docs_enabled": False,
     }
     values.update(overrides)
     return Settings(

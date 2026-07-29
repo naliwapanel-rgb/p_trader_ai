@@ -43,6 +43,8 @@ class Settings(BaseSettings):
         le=16,
     )
     automation_runtime_enabled: bool = True
+    api_docs_enabled: bool = True
+    security_headers_enabled: bool = False
     exchange_trading_enabled: bool = False
     exchange_dry_run: bool = True
     max_order_quantity: float = 1.0
@@ -93,6 +95,11 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8000",
+    ]
+    trusted_hosts: list[str] = [
+        "localhost",
+        "127.0.0.1",
+        "testserver",
     ]
     @field_validator(
         "environment",
@@ -160,6 +167,31 @@ class Settings(BaseSettings):
                     normalized
                 )
         return normalized_origins
+    @field_validator(
+        "trusted_hosts",
+    )
+    @classmethod
+    def normalize_trusted_hosts(
+        cls,
+        hosts: list[str],
+    ) -> list[str]:
+        normalized_hosts = []
+        for host in hosts:
+            normalized = (
+                host
+                .strip()
+                .lower()
+                .rstrip(".")
+            )
+            if (
+                normalized
+                and normalized
+                not in normalized_hosts
+            ):
+                normalized_hosts.append(
+                    normalized
+                )
+        return normalized_hosts
     @property
     def is_production(
         self,

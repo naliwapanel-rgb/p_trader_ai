@@ -11,6 +11,9 @@ from fastapi.exceptions import (
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )
+from starlette.middleware.trustedhost import (
+    TrustedHostMiddleware,
+)
 from app.api.v1.router import (
     api_router,
 )
@@ -30,6 +33,9 @@ from app.database.session import (
 )
 from app.middleware.request_logger import (
     request_logger_middleware,
+)
+from app.middleware.security_headers import (
+    security_headers_middleware,
 )
 from app.services.automation_runtime_service import (
     AutomationRuntime,
@@ -121,6 +127,21 @@ app = FastAPI(
         settings.app_description
     ),
     debug=settings.debug,
+    openapi_url=(
+        "/openapi.json"
+        if settings.api_docs_enabled
+        else None
+    ),
+    docs_url=(
+        "/docs"
+        if settings.api_docs_enabled
+        else None
+    ),
+    redoc_url=(
+        "/redoc"
+        if settings.api_docs_enabled
+        else None
+    ),
     lifespan=lifespan,
 )
 app.middleware("http")(
@@ -147,6 +168,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+if settings.is_hardened_environment:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.trusted_hosts,
+        www_redirect=False,
+    )
+if settings.security_headers_enabled:
+    app.middleware("http")(
+        security_headers_middleware
+    )
 app.include_router(
     api_router,
     prefix="/api/v1",
