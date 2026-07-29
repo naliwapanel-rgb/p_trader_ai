@@ -48,8 +48,8 @@ HEALTHCHECK \
     --timeout=5s \
     --start-period=30s \
     --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).close()"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/live', timeout=3).close()"]
 
 ENTRYPOINT ["/usr/local/bin/p-trader-entrypoint"]
 
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \"${WEB_CONCURRENCY:-1}\" --no-server-header"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \"${WEB_CONCURRENCY:-1}\" --no-server-header --no-access-log"]

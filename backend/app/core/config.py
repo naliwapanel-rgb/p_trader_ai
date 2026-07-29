@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     automation_runtime_enabled: bool = True
     api_docs_enabled: bool = True
     security_headers_enabled: bool = False
+    metrics_enabled: bool = False
+    log_json_enabled: bool = False
+    log_level: str = "INFO"
     exchange_trading_enabled: bool = False
     exchange_dry_run: bool = True
     max_order_quantity: float = 1.0
@@ -192,6 +195,27 @@ class Settings(BaseSettings):
                     normalized
                 )
         return normalized_hosts
+    @field_validator(
+        "log_level",
+        mode="before",
+    )
+    @classmethod
+    def normalize_log_level(
+        cls,
+        value: object,
+    ) -> str:
+        normalized = str(value).strip().upper()
+        if normalized not in {
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL",
+        }:
+            raise ValueError(
+                "Unsupported logging level"
+            )
+        return normalized
     @property
     def is_production(
         self,

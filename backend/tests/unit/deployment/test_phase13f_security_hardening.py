@@ -112,8 +112,7 @@ def test_backend_container_is_restricted():
     )[0]
 
     assert (
-        "image: "
-        "p-trader-ai-backend:phase-13f"
+        "image: p-trader-ai-backend:"
         in backend
     )
     assert "    read_only: true" in backend

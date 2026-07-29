@@ -1,9 +1,16 @@
 name: p-trader-ai
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:18.4-bookworm
     restart: unless-stopped
+    logging: *default-logging
     shm_size: 128mb
 
     environment:
@@ -26,13 +33,14 @@ services:
       - database_net
 
   backend:
-    image: p-trader-ai-backend:phase-13f
+    image: p-trader-ai-backend:phase-13g
 
     build:
       context: .
       dockerfile: Dockerfile
 
     restart: unless-stopped
+    logging: *default-logging
     init: true
     read_only: true
 
@@ -72,6 +80,9 @@ services:
       - TRUSTED_HOSTS=${TRUSTED_HOSTS:?required}
       - API_DOCS_ENABLED=${API_DOCS_ENABLED:?required}
       - SECURITY_HEADERS_ENABLED=${SECURITY_HEADERS_ENABLED:?required}
+      - METRICS_ENABLED=${METRICS_ENABLED:?required}
+      - LOG_JSON_ENABLED=${LOG_JSON_ENABLED:?required}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
       - EXCHANGE_TRADING_ENABLED=false
       - EXCHANGE_DRY_RUN=true
@@ -96,6 +107,7 @@ services:
   nginx:
     image: nginx:1.30.4-alpine
     restart: unless-stopped
+    logging: *default-logging
 
     security_opt:
       - no-new-privileges:true

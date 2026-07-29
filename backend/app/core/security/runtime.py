@@ -237,6 +237,16 @@ def validate_runtime_security(
             "API documentation must be "
             "disabled in hardened environments"
         )
+    if not settings.metrics_enabled:
+        raise RuntimeError(
+            "Metrics must be enabled in "
+            "hardened environments"
+        )
+    if not settings.log_json_enabled:
+        raise RuntimeError(
+            "JSON logging must be enabled in "
+            "hardened environments"
+        )
     if (
         secret_key.lower()
         in INSECURE_SECRET_KEYS
