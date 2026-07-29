@@ -47,6 +47,12 @@ server {
         return 200 "healthy\n";
     }
 
+
+    location = /api/v1/metrics {
+        access_log off;
+        return 404;
+    }
+
     location / {
         proxy_pass http://p_trader_backend;
         proxy_hide_header Server;

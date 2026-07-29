@@ -20,6 +20,9 @@ from app.api.v1.router import (
 from app.core.config import (
     get_settings,
 )
+from app.core.logging import (
+    configure_logging,
+)
 from app.core.exceptions import (
     general_exception_handler,
     http_exception_handler,
@@ -37,6 +40,9 @@ from app.middleware.request_logger import (
 from app.middleware.security_headers import (
     security_headers_middleware,
 )
+from app.monitoring.metrics import (
+    metrics_middleware,
+)
 from app.services.automation_runtime_service import (
     AutomationRuntime,
 )
@@ -44,6 +50,9 @@ from app.services.database_recovery_service import (
     DatabaseRecoveryService,
 )
 settings = get_settings()
+configure_logging(
+    settings
+)
 validate_runtime_security(
     settings
 )
@@ -177,6 +186,10 @@ if settings.is_hardened_environment:
 if settings.security_headers_enabled:
     app.middleware("http")(
         security_headers_middleware
+    )
+if settings.metrics_enabled:
+    app.middleware("http")(
+        metrics_middleware
     )
 app.include_router(
     api_router,

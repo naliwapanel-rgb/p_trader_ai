@@ -33,6 +33,8 @@ def build_hardened_settings(
         "trusted_hosts": ["api.example.com"],
         "security_headers_enabled": True,
         "api_docs_enabled": False,
+        "metrics_enabled": True,
+        "log_json_enabled": True,
         "access_token_expire_minutes": 60,
         "backend_cors_origins": [
             "https://app.example.com",
@@ -241,3 +243,55 @@ def test_environment_templates_are_present(
     assert Path(
         ".env.production.example"
     ).is_file()
+
+
+def test_hardened_environment_requires_metrics(
+) -> None:
+    settings = build_hardened_settings(
+        metrics_enabled=False,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Metrics must be enabled",
+    ):
+        validate_runtime_security(
+            settings
+        )
+
+
+def test_hardened_environment_requires_json_logging(
+) -> None:
+    settings = build_hardened_settings(
+        log_json_enabled=False,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="JSON logging must be enabled",
+    ):
+        validate_runtime_security(
+            settings
+        )
+
+
+def test_log_level_is_normalized(
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        log_level=" warning ",
+    )
+
+    assert settings.log_level == "WARNING"
+
+
+def test_unknown_log_level_is_rejected(
+) -> None:
+    with pytest.raises(
+        ValidationError,
+        match="Unsupported logging level",
+    ):
+        Settings(
+            _env_file=None,
+            log_level="verbose",
+        )

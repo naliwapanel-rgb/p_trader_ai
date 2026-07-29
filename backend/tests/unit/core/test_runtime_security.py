@@ -23,6 +23,8 @@ def build_settings(
         "trusted_hosts": ["api.example.com"],
         "security_headers_enabled": True,
         "api_docs_enabled": False,
+        "metrics_enabled": True,
+        "log_json_enabled": True,
         (
             "access_token_"
             "expire_minutes"
