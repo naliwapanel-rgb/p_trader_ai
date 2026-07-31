@@ -61,7 +61,7 @@ class _MemoryTokenStorage implements TokenStorage {
   }
 
   @override
-  Future<void> writeAccessToken(String token) async {
+  Future<void> writeAccessToken(String token, {bool persist = true}) async {
     this.token = token;
   }
 }
