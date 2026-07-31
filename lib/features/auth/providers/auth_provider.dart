@@ -40,11 +40,11 @@ class AuthNotifier extends Notifier<AuthState> {
     state = const AuthState.loading();
 
     try {
-      await ref
+      final user = await ref
           .read(authRepositoryProvider)
           .login(email: email, password: password, rememberMe: rememberMe);
 
-      state = const AuthState.authenticated();
+      state = AuthState.authenticated(user);
       return true;
     } on AppException catch (error) {
       state = AuthState.failure(error.message);
@@ -57,9 +57,47 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
-  Future<void> logout() async {
-    await ref.read(authRepositoryProvider).logout();
-    state = const AuthState.unauthenticated();
+  Future<bool> restoreSession() async {
+    if (state.isLoading) {
+      return false;
+    }
+
+    state = const AuthState.loading();
+
+    try {
+      final user = await ref.read(authRepositoryProvider).restoreSession();
+
+      if (user == null) {
+        state = const AuthState.unauthenticated();
+        return false;
+      }
+
+      state = AuthState.authenticated(user);
+      return true;
+    } on AppException catch (error) {
+      state = AuthState.failure(error.message);
+      return false;
+    } catch (_) {
+      state = const AuthState.failure('Unable to restore the saved session.');
+      return false;
+    }
+  }
+
+  Future<bool> logout() async {
+    if (state.isLoading) {
+      return false;
+    }
+
+    state = const AuthState.loading();
+
+    try {
+      await ref.read(authRepositoryProvider).logout();
+      state = const AuthState.unauthenticated();
+      return true;
+    } catch (_) {
+      state = const AuthState.failure('Logout failed. Please try again.');
+      return false;
+    }
   }
 
   void clearError() {

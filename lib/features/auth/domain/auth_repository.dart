@@ -1,11 +1,13 @@
+import '../data/auth_user.dart';
+
 abstract interface class AuthRepository {
-  Future<void> login({
+  Future<AuthUser> login({
     required String email,
     required String password,
     required bool rememberMe,
   });
 
-  Future<void> logout();
+  Future<AuthUser?> restoreSession();
 
-  Future<bool> hasStoredSession();
+  Future<void> logout();
 }

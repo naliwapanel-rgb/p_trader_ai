@@ -1,19 +1,21 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../navigation/main_navigation.dart';
 import '../auth/login_screen.dart';
+import '../auth/providers/auth_provider.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fade;
@@ -37,22 +39,39 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Timer(const Duration(seconds: 4), () {
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 650),
-          pageBuilder: (context, animation, index) {
-            return FadeTransition(
-              opacity: animation,
-              child: const LoginScreen(),
-            );
-          },
-        ),
-      );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeSession();
     });
+  }
+
+  Future<void> _initializeSession() async {
+    final minimumSplashDuration = Future<void>.delayed(
+      const Duration(milliseconds: 1800),
+    );
+
+    final isAuthenticated = await ref
+        .read(authProvider.notifier)
+        .restoreSession();
+
+    await minimumSplashDuration;
+
+    if (!mounted) {
+      return;
+    }
+
+    final destination = isAuthenticated
+        ? const MainNavigation()
+        : const LoginScreen();
+
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 500),
+        pageBuilder: (_, animation, _) {
+          return FadeTransition(opacity: animation, child: destination);
+        },
+      ),
+      (_) => false,
+    );
   }
 
   @override
@@ -98,7 +117,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                       const SizedBox(height: AppSpacing.md),
                       const Text(
-                        'Initializing AI trading engine...',
+                        'Verifying secure session...',
                         style: AppTextStyles.body,
                       ),
                     ],

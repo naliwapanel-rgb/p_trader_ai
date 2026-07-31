@@ -19,12 +19,7 @@ void main() {
         },
       );
 
-      final dio = Dio(BaseOptions(baseUrl: 'https://example.test/api/v1'))
-        ..httpClientAdapter = adapter;
-
-      final dataSource = DioAuthRemoteDataSource(
-        BackendDioClient(tokenStorage: _EmptyTokenStorage(), dio: dio),
-      );
+      final dataSource = _buildDataSource(adapter);
 
       final token = await dataSource.login(
         email: 'user@example.com',
@@ -39,20 +34,18 @@ void main() {
       expect(token.accessToken, 'access-token');
     });
 
-    test('uses the backend detail for failed login', () async {
+    test('uses the backend message for failed login', () async {
       final adapter = _AuthHttpClientAdapter(
         statusCode: 401,
         responseBody: const <String, dynamic>{
-          'detail': 'Incorrect email or password',
+          'success': false,
+          'message': 'Incorrect email or password',
+          'data': null,
+          'errors': null,
         },
       );
 
-      final dio = Dio(BaseOptions(baseUrl: 'https://example.test/api/v1'))
-        ..httpClientAdapter = adapter;
-
-      final dataSource = DioAuthRemoteDataSource(
-        BackendDioClient(tokenStorage: _EmptyTokenStorage(), dio: dio),
-      );
+      final dataSource = _buildDataSource(adapter);
 
       await expectLater(
         dataSource.login(email: 'user@example.com', password: 'WrongPassword'),
@@ -65,7 +58,68 @@ void main() {
         ),
       );
     });
+
+    test('parses the authenticated user envelope', () async {
+      final adapter = _AuthHttpClientAdapter(
+        statusCode: 200,
+        responseBody: const <String, dynamic>{
+          'success': true,
+          'message': 'User profile retrieved successfully',
+          'data': <String, dynamic>{
+            'id': 7,
+            'full_name': 'Test User',
+            'email': 'user@example.com',
+            'is_active': true,
+            'created_at': '2026-07-31T10:30:00Z',
+          },
+          'errors': null,
+        },
+      );
+
+      final dataSource = _buildDataSource(adapter);
+      final user = await dataSource.getCurrentUser();
+
+      expect(adapter.lastPath, '/api/v1/users/me');
+      expect(user.id, 7);
+      expect(user.fullName, 'Test User');
+    });
+
+    test('preserves invalid-token status and message', () async {
+      final adapter = _AuthHttpClientAdapter(
+        statusCode: 401,
+        responseBody: const <String, dynamic>{
+          'success': false,
+          'message': 'Invalid or expired token',
+          'data': null,
+          'errors': null,
+        },
+      );
+
+      final dataSource = _buildDataSource(adapter);
+
+      await expectLater(
+        dataSource.getCurrentUser(),
+        throwsA(
+          isA<AppException>()
+              .having((error) => error.statusCode, 'statusCode', 401)
+              .having(
+                (error) => error.message,
+                'message',
+                'Invalid or expired token',
+              ),
+        ),
+      );
+    });
   });
+}
+
+DioAuthRemoteDataSource _buildDataSource(HttpClientAdapter adapter) {
+  final dio = Dio(BaseOptions(baseUrl: 'https://example.test/api/v1'))
+    ..httpClientAdapter = adapter;
+
+  return DioAuthRemoteDataSource(
+    BackendDioClient(tokenStorage: _EmptyTokenStorage(), dio: dio),
+  );
 }
 
 class _EmptyTokenStorage implements TokenStorage {

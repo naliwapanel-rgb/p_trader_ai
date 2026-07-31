@@ -3,9 +3,12 @@ import 'package:dio/dio.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/backend_dio_client.dart';
 import 'auth_token.dart';
+import 'auth_user.dart';
 
 abstract interface class AuthRemoteDataSource {
   Future<AuthToken> login({required String email, required String password});
+
+  Future<AuthUser> getCurrentUser();
 }
 
 class DioAuthRemoteDataSource implements AuthRemoteDataSource {
@@ -34,10 +37,7 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
 
       return AuthToken.fromJson(Map<String, dynamic>.from(data));
     } on DioException catch (error) {
-      throw AppException(
-        _extractErrorMessage(error),
-        statusCode: error.response?.statusCode,
-      );
+      throw _toAppException(error);
     } on FormatException catch (error) {
       throw AppException(error.message);
     } on AppException {
@@ -47,24 +47,62 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
     }
   }
 
+  @override
+  Future<AuthUser> getCurrentUser() async {
+    try {
+      final response = await _client.dio.get<Object?>('/users/me');
+      final responseBody = response.data;
+
+      if (responseBody is! Map) {
+        throw const AppException(
+          'The user-profile service returned an invalid response.',
+        );
+      }
+
+      final responseMap = Map<String, dynamic>.from(responseBody);
+      final userData = responseMap['data'];
+
+      if (userData is! Map) {
+        throw const AppException(
+          'The user-profile response did not contain user data.',
+        );
+      }
+
+      return AuthUser.fromJson(Map<String, dynamic>.from(userData));
+    } on DioException catch (error) {
+      throw _toAppException(error);
+    } on FormatException catch (error) {
+      throw AppException(error.message);
+    } on AppException {
+      rethrow;
+    } catch (_) {
+      throw const AppException('An unexpected user-profile error occurred.');
+    }
+  }
+
+  AppException _toAppException(DioException error) {
+    return AppException(
+      _extractErrorMessage(error),
+      statusCode: error.response?.statusCode,
+    );
+  }
+
   String _extractErrorMessage(DioException error) {
     final statusCode = error.response?.statusCode;
-    final data = error.response?.data;
-
-    final serverMessage = _extractServerMessage(data);
+    final serverMessage = _extractServerMessage(error.response?.data);
 
     if (serverMessage != null) {
       return serverMessage;
     }
 
     return switch (statusCode) {
-      400 => 'The login request was rejected.',
-      401 => 'Incorrect email or password.',
-      403 => 'This account is not permitted to sign in.',
-      422 => 'Check your email and password, then try again.',
-      429 => 'Too many login attempts. Try again later.',
+      400 => 'The request was rejected by the server.',
+      401 => 'Your session is invalid or has expired.',
+      403 => 'This account is not permitted to continue.',
+      422 => 'Check the submitted information and try again.',
+      429 => 'Too many requests. Try again later.',
       int code when code >= 500 =>
-        'The authentication service is temporarily unavailable.',
+        'The P-TRADER AI service is temporarily unavailable.',
       _ => _networkMessage(error.type),
     };
   }
@@ -72,6 +110,12 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
   String? _extractServerMessage(Object? data) {
     if (data is! Map) {
       return null;
+    }
+
+    final message = data['message'];
+
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
     }
 
     final detail = data['detail'];
@@ -85,8 +129,8 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
           .whereType<Map>()
           .map((entry) => entry['msg'])
           .whereType<String>()
-          .where((message) => message.trim().isNotEmpty)
-          .map((message) => message.trim())
+          .where((item) => item.trim().isNotEmpty)
+          .map((item) => item.trim())
           .toList();
 
       if (messages.isNotEmpty) {
@@ -107,8 +151,8 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
         'Unable to connect to the P-TRADER AI backend.',
       DioExceptionType.badCertificate =>
         'The backend security certificate could not be verified.',
-      DioExceptionType.cancel => 'The login request was cancelled.',
-      _ => 'Login failed. Check your connection and try again.',
+      DioExceptionType.cancel => 'The request was cancelled.',
+      _ => 'The request failed. Check your connection and try again.',
     };
   }
 }

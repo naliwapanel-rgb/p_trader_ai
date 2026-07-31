@@ -27,7 +27,11 @@ class BackendDioClient {
         onRequest: (options, handler) async {
           final token = await tokenStorage.readAccessToken();
 
-          if (token != null && token.trim().isNotEmpty) {
+          final isAuthenticationRequest = options.path.startsWith('/auth/');
+
+          if (!isAuthenticationRequest &&
+              token != null &&
+              token.trim().isNotEmpty) {
             options.headers[authorizationHeader] = 'Bearer ${token.trim()}';
           }
 

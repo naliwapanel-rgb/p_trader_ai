@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/glass_card.dart';
+import '../auth/login_screen.dart';
+import '../auth/providers/auth_provider.dart';
+import '../auth/providers/auth_state.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: SingleChildScrollView(
@@ -17,12 +23,11 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _profileCard(),
+            _profileCard(authState),
             const SizedBox(height: AppSpacing.lg),
-
             const Text('Trading', style: AppTextStyles.title),
             const SizedBox(height: AppSpacing.sm),
-            _settingsGroup([
+            _settingsGroup(const [
               _SettingItem(
                 Icons.currency_exchange,
                 'Default Exchange',
@@ -32,11 +37,10 @@ class SettingsScreen extends StatelessWidget {
               _SettingItem(Icons.attach_money, 'Base Currency', 'USDT'),
               _SettingItem(Icons.notifications_none, 'Trade Alerts', 'Enabled'),
             ]),
-
             const SizedBox(height: AppSpacing.lg),
             const Text('AI Assistant', style: AppTextStyles.title),
             const SizedBox(height: AppSpacing.sm),
-            _settingsGroup([
+            _settingsGroup(const [
               _SettingItem(Icons.auto_awesome, 'AI Model', 'P-TRADER AI'),
               _SettingItem(
                 Icons.tips_and_updates_outlined,
@@ -45,27 +49,24 @@ class SettingsScreen extends StatelessWidget {
               ),
               _SettingItem(Icons.mic_none, 'Voice Assistant', 'Coming Soon'),
             ]),
-
             const SizedBox(height: AppSpacing.lg),
             const Text('Security', style: AppTextStyles.title),
             const SizedBox(height: AppSpacing.sm),
-            _settingsGroup([
+            _settingsGroup(const [
               _SettingItem(Icons.fingerprint, 'Biometric Login', 'Off'),
               _SettingItem(Icons.lock_outline, 'Change PIN', ''),
               _SettingItem(Icons.key_outlined, 'API Keys', 'Not Connected'),
             ]),
-
             const SizedBox(height: AppSpacing.lg),
             const Text('About', style: AppTextStyles.title),
             const SizedBox(height: AppSpacing.sm),
-            _settingsGroup([
+            _settingsGroup(const [
               _SettingItem(Icons.info_outline, 'Version', '1.0.0'),
               _SettingItem(Icons.privacy_tip_outlined, 'Privacy Policy', ''),
               _SettingItem(Icons.article_outlined, 'Terms of Service', ''),
             ]),
-
             const SizedBox(height: AppSpacing.lg),
-            _logoutButton(),
+            _logoutButton(context, ref, authState),
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
@@ -73,7 +74,9 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _profileCard() {
+  Widget _profileCard(AuthState authState) {
+    final user = authState.user;
+
     return GlassCard(
       child: Row(
         children: [
@@ -89,13 +92,19 @@ class SettingsScreen extends StatelessWidget {
             child: const Icon(Icons.person, color: Colors.black, size: 34),
           ),
           const SizedBox(width: AppSpacing.md),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Innocent', style: AppTextStyles.title),
-                SizedBox(height: AppSpacing.xs),
-                Text('P-TRADER AI User', style: AppTextStyles.body),
+                Text(
+                  user?.fullName ?? 'P-TRADER AI User',
+                  style: AppTextStyles.title,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  user?.email ?? 'Authenticated account',
+                  style: AppTextStyles.body,
+                ),
               ],
             ),
           ),
@@ -152,13 +161,25 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _logoutButton() {
+  Widget _logoutButton(
+    BuildContext context,
+    WidgetRef ref,
+    AuthState authState,
+  ) {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        onPressed: () {},
-        icon: const Icon(Icons.logout),
-        label: const Text('Logout'),
+        onPressed: authState.isLoading
+            ? null
+            : () => _confirmLogout(context, ref),
+        icon: authState.isLoading
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.logout),
+        label: Text(authState.isLoading ? 'Logging out...' : 'Logout'),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.danger,
           side: const BorderSide(color: AppColors.danger),
@@ -170,12 +191,62 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text(
+            'Are you sure you want to end this secure session?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    final success = await ref.read(authProvider.notifier).logout();
+
+    if (!context.mounted) {
+      return;
+    }
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Logout failed. Please try again.')),
+      );
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
 }
 
 class _SettingItem {
+  const _SettingItem(this.icon, this.title, this.value);
+
   final IconData icon;
   final String title;
   final String value;
-
-  const _SettingItem(this.icon, this.title, this.value);
 }

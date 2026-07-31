@@ -25,6 +25,30 @@ void main() {
       );
     });
 
+    test('does not add Authorization to authentication requests', () async {
+      final adapter = _CapturingHttpClientAdapter();
+      final dio = Dio(BaseOptions(baseUrl: 'https://example.test/api/v1'))
+        ..httpClientAdapter = adapter;
+
+      final client = BackendDioClient(
+        tokenStorage: _MemoryTokenStorage('stale-token'),
+        dio: dio,
+      );
+
+      await client.dio.post<Object?>(
+        '/auth/login',
+        data: const <String, String>{
+          'email': 'user@example.com',
+          'password': 'Password123',
+        },
+      );
+
+      expect(
+        adapter.lastHeaders?.containsKey(BackendDioClient.authorizationHeader),
+        isFalse,
+      );
+    });
+
     test('does not add Authorization without a token', () async {
       final adapter = _CapturingHttpClientAdapter();
       final dio = Dio(BaseOptions(baseUrl: 'https://example.test/api/v1'))

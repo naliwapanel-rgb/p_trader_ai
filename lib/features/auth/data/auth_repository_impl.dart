@@ -1,6 +1,8 @@
 import '../../../core/auth/token_storage.dart';
+import '../../../core/errors/app_exception.dart';
 import '../domain/auth_repository.dart';
 import 'auth_remote_data_source.dart';
+import 'auth_user.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   const AuthRepositoryImpl({
@@ -13,7 +15,7 @@ class AuthRepositoryImpl implements AuthRepository {
   final TokenStorage _tokenStorage;
 
   @override
-  Future<void> login({
+  Future<AuthUser> login({
     required String email,
     required String password,
     required bool rememberMe,
@@ -27,16 +29,37 @@ class AuthRepositoryImpl implements AuthRepository {
       token.accessToken,
       persist: rememberMe,
     );
+
+    try {
+      return await _remoteDataSource.getCurrentUser();
+    } catch (_) {
+      await _tokenStorage.deleteAccessToken();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<AuthUser?> restoreSession() async {
+    final token = await _tokenStorage.readAccessToken();
+
+    if (token == null || token.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      return await _remoteDataSource.getCurrentUser();
+    } on AppException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await _tokenStorage.deleteAccessToken();
+        return null;
+      }
+
+      rethrow;
+    }
   }
 
   @override
   Future<void> logout() {
     return _tokenStorage.deleteAccessToken();
-  }
-
-  @override
-  Future<bool> hasStoredSession() async {
-    final token = await _tokenStorage.readAccessToken();
-    return token != null && token.trim().isNotEmpty;
   }
 }
