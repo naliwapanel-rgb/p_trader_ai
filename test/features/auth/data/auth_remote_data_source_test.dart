@@ -10,6 +10,32 @@ import 'package:p_trader_ai/features/auth/data/auth_remote_data_source.dart';
 
 void main() {
   group('DioAuthRemoteDataSource', () {
+    test('registers a user and parses the access token', () async {
+      final adapter = _AuthHttpClientAdapter(
+        statusCode: 200,
+        responseBody: const <String, dynamic>{
+          'access_token': 'registration-token',
+          'token_type': 'bearer',
+        },
+      );
+
+      final dataSource = _buildDataSource(adapter);
+
+      final token = await dataSource.register(
+        fullName: 'Test User',
+        email: 'USER@example.com',
+        password: 'Password123',
+      );
+
+      expect(adapter.lastPath, '/api/v1/auth/register');
+      expect(adapter.lastData, const <String, String>{
+        'full_name': 'Test User',
+        'email': 'user@example.com',
+        'password': 'Password123',
+      });
+      expect(token.accessToken, 'registration-token');
+    });
+
     test('sends login JSON and parses the access token', () async {
       final adapter = _AuthHttpClientAdapter(
         statusCode: 200,

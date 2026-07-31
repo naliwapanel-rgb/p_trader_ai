@@ -28,6 +28,41 @@ class AuthNotifier extends Notifier<AuthState> {
     return const AuthState.unauthenticated();
   }
 
+  Future<bool> register({
+    required String fullName,
+    required String email,
+    required String password,
+    required bool rememberMe,
+  }) async {
+    if (state.isLoading) {
+      return false;
+    }
+
+    state = const AuthState.loading();
+
+    try {
+      final user = await ref
+          .read(authRepositoryProvider)
+          .register(
+            fullName: fullName,
+            email: email,
+            password: password,
+            rememberMe: rememberMe,
+          );
+
+      state = AuthState.authenticated(user);
+      return true;
+    } on AppException catch (error) {
+      state = AuthState.failure(error.message);
+      return false;
+    } catch (_) {
+      state = const AuthState.failure(
+        'Registration failed unexpectedly. Please try again.',
+      );
+      return false;
+    }
+  }
+
   Future<bool> login({
     required String email,
     required String password,

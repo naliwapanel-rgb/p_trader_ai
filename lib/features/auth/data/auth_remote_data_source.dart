@@ -6,6 +6,12 @@ import 'auth_token.dart';
 import 'auth_user.dart';
 
 abstract interface class AuthRemoteDataSource {
+  Future<AuthToken> register({
+    required String fullName,
+    required String email,
+    required String password,
+  });
+
   Future<AuthToken> login({required String email, required String password});
 
   Future<AuthUser> getCurrentUser();
@@ -17,25 +23,48 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
   final BackendDioClient _client;
 
   @override
-  Future<AuthToken> login({
+  Future<AuthToken> register({
+    required String fullName,
     required String email,
     required String password,
+  }) {
+    return _requestToken(
+      path: '/auth/register',
+      data: <String, String>{
+        'full_name': fullName.trim(),
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      },
+    );
+  }
+
+  @override
+  Future<AuthToken> login({required String email, required String password}) {
+    return _requestToken(
+      path: '/auth/login',
+      data: <String, String>{
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      },
+    );
+  }
+
+  Future<AuthToken> _requestToken({
+    required String path,
+    required Map<String, String> data,
   }) async {
     try {
-      final response = await _client.dio.post<Object?>(
-        '/auth/login',
-        data: <String, String>{'email': email.trim(), 'password': password},
-      );
+      final response = await _client.dio.post<Object?>(path, data: data);
 
-      final data = response.data;
+      final responseData = response.data;
 
-      if (data is! Map) {
+      if (responseData is! Map) {
         throw const AppException(
           'The authentication server returned an invalid response.',
         );
       }
 
-      return AuthToken.fromJson(Map<String, dynamic>.from(data));
+      return AuthToken.fromJson(Map<String, dynamic>.from(responseData));
     } on DioException catch (error) {
       throw _toAppException(error);
     } on FormatException catch (error) {
@@ -99,6 +128,7 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
       400 => 'The request was rejected by the server.',
       401 => 'Your session is invalid or has expired.',
       403 => 'This account is not permitted to continue.',
+      409 => 'An account with this email already exists.',
       422 => 'Check the submitted information and try again.',
       429 => 'Too many requests. Try again later.',
       int code when code >= 500 =>

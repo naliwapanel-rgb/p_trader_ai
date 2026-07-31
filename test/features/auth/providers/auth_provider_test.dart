@@ -6,6 +6,31 @@ import 'package:p_trader_ai/features/auth/providers/auth_provider.dart';
 
 void main() {
   group('AuthNotifier', () {
+    test('registers and authenticates a new user', () async {
+      final repository = _FakeAuthRepository();
+
+      final container = ProviderContainer(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+
+      final registered = await container
+          .read(authProvider.notifier)
+          .register(
+            fullName: 'Test User',
+            email: 'user@example.com',
+            password: 'Password123',
+            rememberMe: true,
+          );
+
+      final state = container.read(authProvider);
+
+      expect(registered, isTrue);
+      expect(repository.registerCalls, 1);
+      expect(state.isAuthenticated, isTrue);
+      expect(state.user?.email, 'user@example.com');
+    });
+
     test('restores an authenticated session', () async {
       final repository = _FakeAuthRepository(restoredUser: _testUser);
 
@@ -65,6 +90,18 @@ class _FakeAuthRepository implements AuthRepository {
 
   final AuthUser? restoredUser;
   int logoutCalls = 0;
+  int registerCalls = 0;
+
+  @override
+  Future<AuthUser> register({
+    required String fullName,
+    required String email,
+    required String password,
+    required bool rememberMe,
+  }) async {
+    registerCalls += 1;
+    return _testUser;
+  }
 
   @override
   Future<AuthUser> login({

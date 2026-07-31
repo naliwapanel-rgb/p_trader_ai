@@ -15,6 +15,25 @@ class AuthRepositoryImpl implements AuthRepository {
   final TokenStorage _tokenStorage;
 
   @override
+  Future<AuthUser> register({
+    required String fullName,
+    required String email,
+    required String password,
+    required bool rememberMe,
+  }) async {
+    final token = await _remoteDataSource.register(
+      fullName: fullName,
+      email: email,
+      password: password,
+    );
+
+    return _completeAuthentication(
+      accessToken: token.accessToken,
+      persist: rememberMe,
+    );
+  }
+
+  @override
   Future<AuthUser> login({
     required String email,
     required String password,
@@ -25,10 +44,17 @@ class AuthRepositoryImpl implements AuthRepository {
       password: password,
     );
 
-    await _tokenStorage.writeAccessToken(
-      token.accessToken,
+    return _completeAuthentication(
+      accessToken: token.accessToken,
       persist: rememberMe,
     );
+  }
+
+  Future<AuthUser> _completeAuthentication({
+    required String accessToken,
+    required bool persist,
+  }) async {
+    await _tokenStorage.writeAccessToken(accessToken, persist: persist);
 
     try {
       return await _remoteDataSource.getCurrentUser();

@@ -8,6 +8,28 @@ import 'package:p_trader_ai/features/auth/data/auth_user.dart';
 
 void main() {
   group('AuthRepositoryImpl', () {
+    test('registration stores the token and returns user', () async {
+      final storage = _MemoryTokenStorage();
+      final remote = _FakeAuthRemoteDataSource();
+
+      final repository = AuthRepositoryImpl(
+        remoteDataSource: remote,
+        tokenStorage: storage,
+      );
+
+      final user = await repository.register(
+        fullName: 'Test User',
+        email: 'user@example.com',
+        password: 'Password123',
+        rememberMe: true,
+      );
+
+      expect(remote.registerCalls, 1);
+      expect(storage.token, 'registration-token');
+      expect(storage.persist, isTrue);
+      expect(user.id, 7);
+    });
+
     test('login stores a persistent token and returns user', () async {
       final storage = _MemoryTokenStorage();
 
@@ -132,6 +154,21 @@ class _FakeAuthRemoteDataSource implements AuthRemoteDataSource {
 
   final AppException? profileError;
   int profileRequests = 0;
+  int registerCalls = 0;
+
+  @override
+  Future<AuthToken> register({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    registerCalls += 1;
+
+    return const AuthToken(
+      accessToken: 'registration-token',
+      tokenType: 'bearer',
+    );
+  }
 
   @override
   Future<AuthToken> login({
