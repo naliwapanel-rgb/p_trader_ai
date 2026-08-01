@@ -9,7 +9,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register_user(
+def register_user(
     data: UserRegisterRequest,
     db: Session = Depends(get_db),
 ):
@@ -17,7 +17,7 @@ async def register_user(
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login_user(
+def login_user(
     data: UserLoginRequest,
     db: Session = Depends(get_db),
 ):

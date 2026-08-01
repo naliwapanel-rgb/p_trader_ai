@@ -14,7 +14,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.get("/me")
-async def get_my_profile(
+def get_my_profile(
     current_user: User = Depends(get_current_user),
 ):
     user_data = UserResponse.model_validate(current_user).model_dump()
@@ -26,7 +26,7 @@ async def get_my_profile(
 
 
 @router.put("/me")
-async def update_my_profile(
+def update_my_profile(
     data: UserUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -45,7 +45,7 @@ async def update_my_profile(
 
 
 @router.put("/me/password")
-async def update_my_password(
+def update_my_password(
     data: PasswordUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -59,7 +59,7 @@ async def update_my_password(
         message="Password updated successfully",
     )
 @router.delete("/me")
-async def deactivate_my_account(
+def deactivate_my_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
