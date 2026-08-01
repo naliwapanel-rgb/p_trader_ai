@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/providers/backend_network_provider.dart';
 import '../data/auth_remote_data_source.dart';
+import '../data/auth_user.dart';
 import '../data/auth_repository_impl.dart';
 import '../domain/auth_repository.dart';
 import 'auth_state.dart';
@@ -116,6 +117,56 @@ class AuthNotifier extends Notifier<AuthState> {
       state = const AuthState.failure('Unable to restore the saved session.');
       return false;
     }
+  }
+
+  Future<AuthUser> updateProfile({
+    required String fullName,
+    required String email,
+  }) async {
+    _requireAuthenticatedUser();
+
+    final updatedUser = await ref
+        .read(authRepositoryProvider)
+        .updateProfile(fullName: fullName, email: email);
+
+    state = AuthState.authenticated(updatedUser);
+
+    return updatedUser;
+  }
+
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    _requireAuthenticatedUser();
+
+    await ref
+        .read(authRepositoryProvider)
+        .updatePassword(
+          currentPassword: currentPassword,
+          newPassword: newPassword,
+        );
+  }
+
+  Future<void> deactivateAccount() async {
+    _requireAuthenticatedUser();
+
+    await ref.read(authRepositoryProvider).deactivateAccount();
+
+    state = const AuthState.unauthenticated();
+  }
+
+  AuthUser _requireAuthenticatedUser() {
+    final user = state.user;
+
+    if (!state.isAuthenticated || user == null) {
+      throw const AppException(
+        'You must be logged in to manage this account.',
+        statusCode: 401,
+      );
+    }
+
+    return user;
   }
 
   Future<bool> logout() async {

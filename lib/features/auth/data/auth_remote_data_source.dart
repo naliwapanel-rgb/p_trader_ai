@@ -15,6 +15,18 @@ abstract interface class AuthRemoteDataSource {
   Future<AuthToken> login({required String email, required String password});
 
   Future<AuthUser> getCurrentUser();
+
+  Future<AuthUser> updateProfile({
+    required String fullName,
+    required String email,
+  });
+
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+
+  Future<void> deactivateAccount();
 }
 
 class DioAuthRemoteDataSource implements AuthRemoteDataSource {
@@ -77,24 +89,58 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
   }
 
   @override
-  Future<AuthUser> getCurrentUser() async {
+  Future<AuthUser> getCurrentUser() {
+    return _requestUser(
+      request: () => _client.dio.get<Object?>('/users/me'),
+      invalidResponseMessage:
+          'The user-profile service returned an invalid response.',
+      missingDataMessage:
+          'The user-profile response did not contain user data.',
+      unexpectedErrorMessage: 'An unexpected user-profile error occurred.',
+    );
+  }
+
+  @override
+  Future<AuthUser> updateProfile({
+    required String fullName,
+    required String email,
+  }) {
+    return _requestUser(
+      request: () => _client.dio.put<Object?>(
+        '/users/me',
+        data: <String, String>{
+          'full_name': fullName.trim(),
+          'email': email.trim().toLowerCase(),
+        },
+      ),
+      invalidResponseMessage:
+          'The profile service returned an invalid response.',
+      missingDataMessage:
+          'The profile update response did not contain user data.',
+      unexpectedErrorMessage: 'An unexpected profile update error occurred.',
+    );
+  }
+
+  Future<AuthUser> _requestUser({
+    required Future<Response<Object?>> Function() request,
+    required String invalidResponseMessage,
+    required String missingDataMessage,
+    required String unexpectedErrorMessage,
+  }) async {
     try {
-      final response = await _client.dio.get<Object?>('/users/me');
+      final response = await request();
       final responseBody = response.data;
 
       if (responseBody is! Map) {
-        throw const AppException(
-          'The user-profile service returned an invalid response.',
-        );
+        throw AppException(invalidResponseMessage);
       }
 
       final responseMap = Map<String, dynamic>.from(responseBody);
+
       final userData = responseMap['data'];
 
       if (userData is! Map) {
-        throw const AppException(
-          'The user-profile response did not contain user data.',
-        );
+        throw AppException(missingDataMessage);
       }
 
       return AuthUser.fromJson(Map<String, dynamic>.from(userData));
@@ -105,7 +151,48 @@ class DioAuthRemoteDataSource implements AuthRemoteDataSource {
     } on AppException {
       rethrow;
     } catch (_) {
-      throw const AppException('An unexpected user-profile error occurred.');
+      throw AppException(unexpectedErrorMessage);
+    }
+  }
+
+  @override
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) {
+    return _performAccountRequest(
+      request: () => _client.dio.put<Object?>(
+        '/users/me/password',
+        data: <String, String>{
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        },
+      ),
+      unexpectedErrorMessage: 'An unexpected password update error occurred.',
+    );
+  }
+
+  @override
+  Future<void> deactivateAccount() {
+    return _performAccountRequest(
+      request: () => _client.dio.delete<Object?>('/users/me'),
+      unexpectedErrorMessage:
+          'An unexpected account deactivation error occurred.',
+    );
+  }
+
+  Future<void> _performAccountRequest({
+    required Future<Response<Object?>> Function() request,
+    required String unexpectedErrorMessage,
+  }) async {
+    try {
+      await request();
+    } on DioException catch (error) {
+      throw _toAppException(error);
+    } on AppException {
+      rethrow;
+    } catch (_) {
+      throw AppException(unexpectedErrorMessage);
     }
   }
 

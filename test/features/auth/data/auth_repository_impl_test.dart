@@ -134,6 +134,60 @@ void main() {
       expect(storage.token, 'existing-token');
     });
 
+    test('updates profile through the backend', () async {
+      final remote = _FakeAuthRemoteDataSource();
+
+      final repository = AuthRepositoryImpl(
+        remoteDataSource: remote,
+        tokenStorage: _MemoryTokenStorage(),
+      );
+
+      final user = await repository.updateProfile(
+        fullName: 'Updated User',
+        email: 'updated@example.com',
+      );
+
+      expect(remote.updateProfileCalls, 1);
+      expect(remote.updatedFullName, 'Updated User');
+      expect(remote.updatedEmail, 'updated@example.com');
+      expect(user.fullName, 'Updated User');
+      expect(user.email, 'updated@example.com');
+    });
+
+    test('updates password through the backend', () async {
+      final remote = _FakeAuthRemoteDataSource();
+
+      final repository = AuthRepositoryImpl(
+        remoteDataSource: remote,
+        tokenStorage: _MemoryTokenStorage(),
+      );
+
+      await repository.updatePassword(
+        currentPassword: 'Password123',
+        newPassword: 'NewPassword456',
+      );
+
+      expect(remote.updatePasswordCalls, 1);
+      expect(remote.currentPassword, 'Password123');
+      expect(remote.newPassword, 'NewPassword456');
+    });
+
+    test('deactivation clears the local token', () async {
+      final remote = _FakeAuthRemoteDataSource();
+      final storage = _MemoryTokenStorage()..token = 'existing-token';
+
+      final repository = AuthRepositoryImpl(
+        remoteDataSource: remote,
+        tokenStorage: storage,
+      );
+
+      await repository.deactivateAccount();
+
+      expect(remote.deactivateCalls, 1);
+      expect(storage.token, isNull);
+      expect(storage.deleteCalls, 1);
+    });
+
     test('logout deletes the token', () async {
       final storage = _MemoryTokenStorage()..token = 'existing-token';
 
@@ -155,6 +209,13 @@ class _FakeAuthRemoteDataSource implements AuthRemoteDataSource {
   final AppException? profileError;
   int profileRequests = 0;
   int registerCalls = 0;
+  int updateProfileCalls = 0;
+  int updatePasswordCalls = 0;
+  int deactivateCalls = 0;
+  String? updatedFullName;
+  String? updatedEmail;
+  String? currentPassword;
+  String? newPassword;
 
   @override
   Future<AuthToken> register({
@@ -176,6 +237,39 @@ class _FakeAuthRemoteDataSource implements AuthRemoteDataSource {
     required String password,
   }) async {
     return const AuthToken(accessToken: 'test-token', tokenType: 'bearer');
+  }
+
+  @override
+  Future<AuthUser> updateProfile({
+    required String fullName,
+    required String email,
+  }) async {
+    updateProfileCalls += 1;
+    updatedFullName = fullName;
+    updatedEmail = email;
+
+    return AuthUser(
+      id: 7,
+      fullName: fullName,
+      email: email,
+      isActive: true,
+      createdAt: DateTime.utc(2026, 7, 31),
+    );
+  }
+
+  @override
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    updatePasswordCalls += 1;
+    this.currentPassword = currentPassword;
+    this.newPassword = newPassword;
+  }
+
+  @override
+  Future<void> deactivateAccount() async {
+    deactivateCalls += 1;
   }
 
   @override

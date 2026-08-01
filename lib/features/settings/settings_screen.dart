@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/errors/app_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -8,6 +9,8 @@ import '../../core/widgets/glass_card.dart';
 import '../auth/login_screen.dart';
 import '../auth/providers/auth_provider.dart';
 import '../auth/providers/auth_state.dart';
+import 'change_password_screen.dart';
+import 'edit_profile_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -15,6 +18,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
+    final user = authState.user;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -23,7 +27,7 @@ class SettingsScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _profileCard(authState),
+            _profileCard(context, authState),
             const SizedBox(height: AppSpacing.lg),
             const Text('Trading', style: AppTextStyles.title),
             const SizedBox(height: AppSpacing.sm),
@@ -52,10 +56,27 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.lg),
             const Text('Security', style: AppTextStyles.title),
             const SizedBox(height: AppSpacing.sm),
-            _settingsGroup(const [
-              _SettingItem(Icons.fingerprint, 'Biometric Login', 'Off'),
-              _SettingItem(Icons.lock_outline, 'Change PIN', ''),
-              _SettingItem(Icons.key_outlined, 'API Keys', 'Not Connected'),
+            _settingsGroup([
+              const _SettingItem(Icons.fingerprint, 'Biometric Login', 'Off'),
+              _SettingItem(
+                Icons.password_outlined,
+                'Change Password',
+                'Update account password',
+                onTap: user == null
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ChangePasswordScreen(),
+                          ),
+                        );
+                      },
+              ),
+              const _SettingItem(
+                Icons.key_outlined,
+                'API Keys',
+                'Not Connected',
+              ),
             ]),
             const SizedBox(height: AppSpacing.lg),
             const Text('About', style: AppTextStyles.title),
@@ -66,6 +87,10 @@ class SettingsScreen extends ConsumerWidget {
               _SettingItem(Icons.article_outlined, 'Terms of Service', ''),
             ]),
             const SizedBox(height: AppSpacing.lg),
+            const Text('Danger Zone', style: AppTextStyles.title),
+            const SizedBox(height: AppSpacing.sm),
+            _deactivateButton(context, ref, authState),
+            const SizedBox(height: AppSpacing.md),
             _logoutButton(context, ref, authState),
             const SizedBox(height: AppSpacing.xl),
           ],
@@ -74,46 +99,68 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _profileCard(AuthState authState) {
+  Widget _profileCard(BuildContext context, AuthState authState) {
     final user = authState.user;
 
-    return GlassCard(
-      child: Row(
-        children: [
-          Container(
-            height: 62,
-            width: 62,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, Colors.deepPurpleAccent],
+    return GestureDetector(
+      onTap: user == null
+          ? null
+          : () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => EditProfileScreen(user: user),
+                ),
+              );
+            },
+      child: GlassCard(
+        child: Row(
+          children: [
+            Container(
+              height: 62,
+              width: 62,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, Colors.deepPurpleAccent],
+                ),
+                borderRadius: BorderRadius.circular(22),
               ),
-              borderRadius: BorderRadius.circular(22),
+              child: const Icon(Icons.person, color: Colors.black, size: 34),
             ),
-            child: const Icon(Icons.person, color: Colors.black, size: 34),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user?.fullName ?? 'P-TRADER AI User',
-                  style: AppTextStyles.title,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  user?.email ?? 'Authenticated account',
-                  style: AppTextStyles.body,
-                ),
-              ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user?.fullName ?? 'P-TRADER AI User',
+                    style: AppTextStyles.title,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    user?.email ?? 'Authenticated account',
+                    style: AppTextStyles.body,
+                  ),
+                  if (user != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    const Text(
+                      'Tap to edit profile',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          const Icon(
-            Icons.arrow_forward_ios,
-            size: 16,
-            color: AppColors.textSecondary,
-          ),
-        ],
+            if (user != null)
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -145,18 +192,45 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: item.value.isEmpty
                     ? null
                     : Text(item.value, style: AppTextStyles.body),
-                trailing: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 14,
-                  color: AppColors.textSecondary,
-                ),
-                onTap: () {},
+                trailing: item.onTap == null
+                    ? null
+                    : const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                onTap: item.onTap,
               ),
               if (!isLast)
                 const Divider(color: AppColors.divider, height: 1, indent: 72),
             ],
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Widget _deactivateButton(
+    BuildContext context,
+    WidgetRef ref,
+    AuthState authState,
+  ) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: !authState.isAuthenticated
+            ? null
+            : () => _confirmDeactivation(context, ref),
+        icon: const Icon(Icons.person_off_outlined),
+        label: const Text('Deactivate Account'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.danger,
+          side: const BorderSide(color: AppColors.danger),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radius),
+          ),
+        ),
       ),
     );
   }
@@ -181,8 +255,7 @@ class SettingsScreen extends ConsumerWidget {
             : const Icon(Icons.logout),
         label: Text(authState.isLoading ? 'Logging out...' : 'Logout'),
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.danger,
-          side: const BorderSide(color: AppColors.danger),
+          foregroundColor: AppColors.textSecondary,
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radius),
@@ -192,6 +265,42 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _confirmDeactivation(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DeactivateAccountDialog(),
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    try {
+      await ref.read(authProvider.notifier).deactivateAccount();
+
+      if (!context.mounted) {
+        return;
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
+    } on AppException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account deactivation failed.')),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -199,7 +308,8 @@ class SettingsScreen extends ConsumerWidget {
         return AlertDialog(
           title: const Text('Logout'),
           content: const Text(
-            'Are you sure you want to end this secure session?',
+            'Are you sure you want to end '
+            'this secure session?',
           ),
           actions: [
             TextButton(
@@ -244,9 +354,79 @@ class SettingsScreen extends ConsumerWidget {
 }
 
 class _SettingItem {
-  const _SettingItem(this.icon, this.title, this.value);
+  const _SettingItem(this.icon, this.title, this.value, {this.onTap});
 
   final IconData icon;
   final String title;
   final String value;
+  final VoidCallback? onTap;
+}
+
+class _DeactivateAccountDialog extends StatefulWidget {
+  const _DeactivateAccountDialog();
+
+  @override
+  State<_DeactivateAccountDialog> createState() =>
+      _DeactivateAccountDialogState();
+}
+
+class _DeactivateAccountDialogState extends State<_DeactivateAccountDialog> {
+  final _controller = TextEditingController();
+
+  bool get _confirmed => _controller.text.trim() == 'DEACTIVATE';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Deactivate Account'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This disables your account and ends '
+            'the current session.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Type DEACTIVATE to continue.',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _controller,
+            autocorrect: false,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              hintText: 'DEACTIVATE',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop(false);
+          },
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _confirmed
+              ? () {
+                  Navigator.of(context).pop(true);
+                }
+              : null,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+          child: const Text('Deactivate'),
+        ),
+      ],
+    );
+  }
 }

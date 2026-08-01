@@ -66,6 +66,68 @@ void main() {
       expect(container.read(authProvider).isAuthenticated, isFalse);
     });
 
+    test('profile update refreshes authenticated user state', () async {
+      final repository = _FakeAuthRepository(restoredUser: _testUser);
+
+      final container = ProviderContainer(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(authProvider.notifier).restoreSession();
+
+      await container
+          .read(authProvider.notifier)
+          .updateProfile(
+            fullName: 'Updated User',
+            email: 'updated@example.com',
+          );
+
+      final state = container.read(authProvider);
+
+      expect(repository.updateProfileCalls, 1);
+      expect(state.isAuthenticated, isTrue);
+      expect(state.user?.fullName, 'Updated User');
+      expect(state.user?.email, 'updated@example.com');
+    });
+
+    test('password update preserves authenticated state', () async {
+      final repository = _FakeAuthRepository(restoredUser: _testUser);
+
+      final container = ProviderContainer(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(authProvider.notifier).restoreSession();
+
+      await container
+          .read(authProvider.notifier)
+          .updatePassword(
+            currentPassword: 'Password123',
+            newPassword: 'NewPassword456',
+          );
+
+      expect(repository.updatePasswordCalls, 1);
+      expect(container.read(authProvider).isAuthenticated, isTrue);
+    });
+
+    test('deactivation clears authenticated state', () async {
+      final repository = _FakeAuthRepository(restoredUser: _testUser);
+
+      final container = ProviderContainer(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(authProvider.notifier).restoreSession();
+
+      await container.read(authProvider.notifier).deactivateAccount();
+
+      expect(repository.deactivateCalls, 1);
+      expect(container.read(authProvider).isAuthenticated, isFalse);
+    });
+
     test('logout clears authenticated state', () async {
       final repository = _FakeAuthRepository(restoredUser: _testUser);
 
@@ -91,6 +153,9 @@ class _FakeAuthRepository implements AuthRepository {
   final AuthUser? restoredUser;
   int logoutCalls = 0;
   int registerCalls = 0;
+  int updateProfileCalls = 0;
+  int updatePasswordCalls = 0;
+  int deactivateCalls = 0;
 
   @override
   Future<AuthUser> register({
@@ -115,6 +180,35 @@ class _FakeAuthRepository implements AuthRepository {
   @override
   Future<void> logout() async {
     logoutCalls += 1;
+  }
+
+  @override
+  Future<AuthUser> updateProfile({
+    required String fullName,
+    required String email,
+  }) async {
+    updateProfileCalls += 1;
+
+    return AuthUser(
+      id: 7,
+      fullName: fullName,
+      email: email,
+      isActive: true,
+      createdAt: DateTime.utc(2026, 7, 31),
+    );
+  }
+
+  @override
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    updatePasswordCalls += 1;
+  }
+
+  @override
+  Future<void> deactivateAccount() async {
+    deactivateCalls += 1;
   }
 
   @override
