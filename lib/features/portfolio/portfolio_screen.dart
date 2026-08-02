@@ -11,6 +11,7 @@ import '../../core/widgets/coin_logo.dart';
 import 'providers/portfolio_provider.dart';
 import 'data/portfolio_holding.dart';
 import '../../providers/market_providers.dart';
+import 'live_portfolio_screen.dart';
 
 class PortfolioScreen extends ConsumerWidget {
   const PortfolioScreen({super.key});
@@ -24,6 +25,18 @@ class PortfolioScreen extends ConsumerWidget {
         title: const Text('Portfolio'),
         actions: [
           IconButton(
+            tooltip: 'Open live portfolio',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const LivePortfolioScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.cloud_sync_outlined),
+          ),
+          IconButton(
+            tooltip: 'Add manual holding',
             onPressed: () {
               _showAddHoldingDialog(context, ref);
             },

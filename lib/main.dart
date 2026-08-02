@@ -6,6 +6,7 @@ import 'features/splash/splash_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/providers/local_storage_provider.dart';
+import 'features/auth/session_expiry_listener.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,12 @@ class PTraderAI extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      builder: (context, child) {
+        return AuthSessionExpiryListener(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       debugShowCheckedModeBanner: false,
       title: 'P-TRADER AI',
       theme: AppTheme.darkTheme,

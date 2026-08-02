@@ -191,4 +191,10 @@ class AuthNotifier extends Notifier<AuthState> {
       state = const AuthState.unauthenticated();
     }
   }
+
+  void expireSession({
+    String message = 'Your session has expired. Please log in again.',
+  }) {
+    state = AuthState.failure(message);
+  }
 }
