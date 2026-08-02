@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
-
-import '../data/price_alert.dart';
-import '../providers/price_alert_provider.dart';
+import '../data/backend_price_alert.dart';
+import '../providers/backend_price_alert_provider.dart';
 
 class AddAlertDialog extends ConsumerStatefulWidget {
   const AddAlertDialog({super.key});
@@ -14,91 +13,185 @@ class AddAlertDialog extends ConsumerStatefulWidget {
 }
 
 class _AddAlertDialogState extends ConsumerState<AddAlertDialog> {
+  static const List<String> _supportedExchanges = <String>[
+    'BYBIT',
+    'BINANCE',
+    'MEXC',
+    'GATEIO',
+  ];
+
   final _symbolController = TextEditingController();
   final _priceController = TextEditingController();
 
-  PriceAlertCondition _condition = PriceAlertCondition.above;
+  BackendPriceAlertCondition _condition = BackendPriceAlertCondition.above;
+
+  String _exchange = PriceAlertSymbolMapper.defaultExchange;
+
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _symbolController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(backendPriceAlertProvider);
+
     return AlertDialog(
       title: const Text('Create Price Alert'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _symbolController,
-            decoration: const InputDecoration(
-              labelText: 'Coin Symbol',
-              hintText: 'BTC',
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _priceController,
-            decoration: const InputDecoration(
-              labelText: 'Target Price',
-              hintText: '120000',
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          DropdownButtonFormField<PriceAlertCondition>(
-            initialValue: _condition,
-            decoration: const InputDecoration(labelText: 'Condition'),
-            items: const [
-              DropdownMenuItem(
-                value: PriceAlertCondition.above,
-                child: Text('Price Above'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _symbolController,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Asset Symbol',
+                hintText: 'BTC',
+                helperText: 'Enter the base asset only.',
               ),
-              DropdownMenuItem(
-                value: PriceAlertCondition.below,
-                child: Text('Price Below'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            DropdownButtonFormField<String>(
+              initialValue: _exchange,
+              decoration: const InputDecoration(labelText: 'Exchange'),
+              items: _supportedExchanges
+                  .map(
+                    (exchange) => DropdownMenuItem(
+                      value: exchange,
+                      child: Text(exchange),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: state.isMutating
+                  ? null
+                  : (value) {
+                      if (value == null) {
+                        return;
+                      }
+
+                      setState(() {
+                        _exchange = value;
+                      });
+                    },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _priceController,
+              decoration: const InputDecoration(
+                labelText: 'Target Price',
+                hintText: '120000',
+                prefixText: '\$',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            DropdownButtonFormField<BackendPriceAlertCondition>(
+              initialValue: _condition,
+              decoration: const InputDecoration(labelText: 'Condition'),
+              items: BackendPriceAlertCondition.values
+                  .map(
+                    (condition) => DropdownMenuItem(
+                      value: condition,
+                      child: Text(condition.label),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: state.isMutating
+                  ? null
+                  : (value) {
+                      if (value == null) {
+                        return;
+                      }
+
+                      setState(() {
+                        _condition = value;
+                      });
+                    },
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
             ],
-            onChanged: (value) {
-              if (value == null) return;
-
-              setState(() {
-                _condition = value;
-              });
-            },
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: state.isMutating
+              ? null
+              : () => Navigator.pop(context, false),
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () async {
-            final symbol = _symbolController.text.trim().toUpperCase();
-            final price = double.tryParse(_priceController.text.trim());
-
-            if (symbol.isEmpty || price == null || price <= 0) {
-              return;
-            }
-
-            final alert = PriceAlert(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              coinId: symbol.toLowerCase(),
-              symbol: symbol,
-              targetPrice: price,
-              condition: _condition,
-              isEnabled: true,
-              createdAt: DateTime.now(),
-            );
-
-            await ref.read(priceAlertsProvider.notifier).addAlert(alert);
-
-            if (context.mounted) {
-              Navigator.pop(context);
-            }
-          },
-          child: const Text('Save'),
+          onPressed: state.isMutating ? null : _createAlert,
+          child: state.isMutating
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
         ),
       ],
     );
+  }
+
+  Future<void> _createAlert() async {
+    final symbol = _symbolController.text.trim();
+    final price = double.tryParse(_priceController.text.trim());
+
+    if (symbol.length < 2) {
+      setState(() {
+        _errorMessage = 'Enter a valid asset symbol such as BTC.';
+      });
+      return;
+    }
+
+    if (price == null || !price.isFinite || price <= 0) {
+      setState(() {
+        _errorMessage = 'Enter a target price greater than zero.';
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage = null;
+    });
+
+    final created = await ref
+        .read(backendPriceAlertProvider.notifier)
+        .createAlert(
+          symbol: symbol,
+          exchange: _exchange,
+          condition: _condition,
+          targetPrice: price,
+        );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (created == null) {
+      setState(() {
+        _errorMessage =
+            ref.read(backendPriceAlertProvider).errorMessage ??
+            'The price alert could not be created.';
+      });
+      return;
+    }
+
+    Navigator.pop(context, true);
   }
 }

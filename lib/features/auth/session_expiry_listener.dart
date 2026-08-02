@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session_expiry_provider.dart';
 import '../exchange_accounts/providers/exchange_account_provider.dart';
 import '../portfolio/providers/live_portfolio_provider.dart';
+import '../alerts/providers/backend_price_alert_provider.dart';
 import '../watchlist/providers/backend_watchlist_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
@@ -49,7 +50,7 @@ class _AuthSessionExpiryListenerState
       ref.invalidate(exchangeAccountProvider);
       ref.invalidate(livePortfolioProvider);
       ref.invalidate(backendWatchlistProvider);
-
+      ref.invalidate(backendPriceAlertProvider);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
           return;

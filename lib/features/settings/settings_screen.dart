@@ -10,6 +10,7 @@ import '../auth/login_screen.dart';
 import '../auth/providers/auth_provider.dart';
 import '../auth/providers/auth_state.dart';
 import '../exchange_accounts/exchange_accounts_screen.dart';
+import '../alerts/providers/backend_price_alert_provider.dart';
 import '../watchlist/providers/backend_watchlist_provider.dart';
 import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
@@ -291,6 +292,7 @@ class SettingsScreen extends ConsumerWidget {
 
       ref.invalidate(backendWatchlistProvider);
 
+      ref.invalidate(backendPriceAlertProvider);
       if (!context.mounted) {
         return;
       }
@@ -361,6 +363,7 @@ class SettingsScreen extends ConsumerWidget {
 
     ref.invalidate(backendWatchlistProvider);
 
+    ref.invalidate(backendPriceAlertProvider);
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
       (_) => false,
