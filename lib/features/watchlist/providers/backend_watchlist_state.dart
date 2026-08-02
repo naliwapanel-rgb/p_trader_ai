@@ -42,6 +42,33 @@ class BackendWatchlistState {
     return null;
   }
 
+  List<BackendWatchlistItem> itemsForExchange(String exchange) {
+    final normalizedExchange = WatchlistSymbolMapper.normalizeExchange(
+      exchange,
+    );
+
+    return items
+        .where((item) => item.exchange == normalizedExchange)
+        .toList(growable: false);
+  }
+
+  Set<String> baseAssetSymbolsForExchange(String exchange) {
+    return itemsForExchange(
+      exchange,
+    ).map((item) => item.baseAssetSymbol).toSet();
+  }
+
+  bool containsAssetSymbol({
+    required String assetSymbol,
+    required String exchange,
+  }) {
+    return findItem(symbol: assetSymbol, exchange: exchange) != null;
+  }
+
+  int countForExchange(String exchange) {
+    return itemsForExchange(exchange).length;
+  }
+
   BackendWatchlistState copyWith({
     List<BackendWatchlistItem>? items,
     bool? isLoading,

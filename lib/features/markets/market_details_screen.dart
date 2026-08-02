@@ -7,33 +7,98 @@ import '../../core/widgets/glass_card.dart';
 import '../../domain/entities/crypto_asset.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../watchlist/providers/watchlist_provider.dart';
+import '../watchlist/data/backend_watchlist_item.dart';
+import '../watchlist/providers/backend_watchlist_provider.dart';
 
-class MarketDetailsScreen extends ConsumerWidget {
-  final CryptoAsset coin;
-
+class MarketDetailsScreen extends ConsumerStatefulWidget {
   const MarketDetailsScreen({super.key, required this.coin});
 
+  final CryptoAsset coin;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MarketDetailsScreen> createState() {
+    return _MarketDetailsScreenState();
+  }
+}
+
+class _MarketDetailsScreenState extends ConsumerState<MarketDetailsScreen> {
+  CryptoAsset get coin => widget.coin;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      ref.read(backendWatchlistProvider.notifier).loadItems();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isPositive = coin.priceChangePercentage24h >= 0;
     final changePrefix = isPositive ? '+' : '';
 
-    final watchlist = ref.watch(watchlistCoinIdsProvider);
-    final isFavorite = watchlist.contains(coin.id);
+    final watchlistState = ref.watch(backendWatchlistProvider);
+
+    final isFavorite = watchlistState.containsAssetSymbol(
+      assetSymbol: coin.symbol,
+      exchange: WatchlistSymbolMapper.defaultExchange,
+    );
 
     return Scaffold(
       appBar: AppBar(
         title: Text('${coin.symbol.toUpperCase()} Market'),
         actions: [
           IconButton(
-            onPressed: () {
-              ref.read(watchlistCoinIdsProvider.notifier).toggleCoin(coin.id);
-            },
-            icon: Icon(
-              isFavorite ? Icons.star : Icons.star_border,
-              color: isFavorite ? Colors.amber : Colors.white,
-            ),
+            onPressed: watchlistState.isMutating
+                ? null
+                : () async {
+                    final success = await ref
+                        .read(backendWatchlistProvider.notifier)
+                        .toggleAssetSymbol(assetSymbol: coin.symbol);
+
+                    if (!context.mounted) {
+                      return;
+                    }
+
+                    if (!success) {
+                      final message =
+                          ref.read(backendWatchlistProvider).errorMessage ??
+                          'The watchlist could not be updated.';
+
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(message)));
+
+                      return;
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isFavorite
+                              ? '${coin.name} removed '
+                                    'from watchlist.'
+                              : '${coin.name} added '
+                                    'to watchlist.',
+                        ),
+                      ),
+                    );
+                  },
+            tooltip: isFavorite ? 'Remove from watchlist' : 'Add to watchlist',
+            icon: watchlistState.isMutating
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    isFavorite ? Icons.star : Icons.star_border,
+                    color: isFavorite ? Colors.amber : Colors.white,
+                  ),
           ),
         ],
       ),

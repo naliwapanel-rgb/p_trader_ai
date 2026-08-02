@@ -10,17 +10,42 @@ import '../../providers/market_providers.dart';
 import 'market_details_screen.dart';
 import 'market_search_screen.dart';
 import '../watchlist/watchlist_screen.dart';
-import '../watchlist/providers/watchlist_provider.dart';
+import '../watchlist/data/backend_watchlist_item.dart';
+import '../watchlist/providers/backend_watchlist_provider.dart';
 
-class MarketsScreen extends ConsumerWidget {
+class MarketsScreen extends ConsumerStatefulWidget {
   const MarketsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MarketsScreen> createState() {
+    return _MarketsScreenState();
+  }
+}
+
+class _MarketsScreenState extends ConsumerState<MarketsScreen> {
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      ref.read(backendWatchlistProvider.notifier).loadItems();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final marketsAsync = ref.watch(liveMarketsProvider);
     final selectedFilter = ref.watch(marketFilterProvider);
     final searchQuery = ref.watch(marketSearchProvider);
-    final watchlistCount = ref.watch(watchlistCoinIdsProvider).length;
+    final watchlistState = ref.watch(backendWatchlistProvider);
+
+    final watchlistCount = watchlistState.countForExchange(
+      WatchlistSymbolMapper.defaultExchange,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -55,10 +80,12 @@ class MarketsScreen extends ConsumerWidget {
             },
           ),
           IconButton(
-            onPressed: () {
-              ref.read(marketCacheServiceProvider).clear();
-              ref.invalidate(liveMarketsProvider);
-            },
+            onPressed: watchlistState.isLoading
+                ? null
+                : () {
+                    _refresh();
+                  },
+            tooltip: 'Refresh markets and watchlist',
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -84,10 +111,7 @@ class MarketsScreen extends ConsumerWidget {
           return RefreshIndicator(
             color: AppColors.primary,
             backgroundColor: AppColors.card,
-            onRefresh: () async {
-              ref.read(marketCacheServiceProvider).clear();
-              ref.invalidate(liveMarketsProvider);
-            },
+            onRefresh: _refresh,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppSpacing.md),
@@ -111,6 +135,18 @@ class MarketsScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  Future<void> _refresh() async {
+    ref.read(marketCacheServiceProvider).clear();
+
+    final marketRefresh = ref.refresh(liveMarketsProvider.future);
+
+    final watchlistRefresh = ref
+        .read(backendWatchlistProvider.notifier)
+        .loadItems(force: true);
+
+    await Future.wait<Object?>([marketRefresh, watchlistRefresh]);
   }
 
   Widget _statusChip(String text, IconData icon, Color color) {

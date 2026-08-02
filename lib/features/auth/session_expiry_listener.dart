@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session_expiry_provider.dart';
 import '../exchange_accounts/providers/exchange_account_provider.dart';
 import '../portfolio/providers/live_portfolio_provider.dart';
+import '../watchlist/providers/backend_watchlist_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
 
@@ -44,9 +45,10 @@ class _AuthSessionExpiryListenerState
 
       // Clear user-specific provider state so another
       // login cannot briefly see the previous session's
-      // exchange or live-portfolio information.
+      // exchange, portfolio, or watchlist information.
       ref.invalidate(exchangeAccountProvider);
       ref.invalidate(livePortfolioProvider);
+      ref.invalidate(backendWatchlistProvider);
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
