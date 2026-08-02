@@ -54,7 +54,6 @@ class BackendDioClient {
             'BACKEND ERROR => ${error.response?.statusCode} '
             '${error.requestOptions.method} '
             '${error.requestOptions.uri}',
-            error: error,
           );
 
           handler.next(error);

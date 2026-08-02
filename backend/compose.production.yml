@@ -33,7 +33,7 @@ services:
       - database_net
 
   backend:
-    image: p-trader-ai-backend:phase-13g
+    image: p-trader-ai-backend:auth-latency-hardening
 
     build:
       context: .

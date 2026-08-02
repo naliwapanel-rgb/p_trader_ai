@@ -9,6 +9,7 @@ import '../../core/widgets/glass_card.dart';
 import '../auth/login_screen.dart';
 import '../auth/providers/auth_provider.dart';
 import '../auth/providers/auth_state.dart';
+import '../exchange_accounts/exchange_accounts_screen.dart';
 import 'change_password_screen.dart';
 import 'edit_profile_screen.dart';
 
@@ -72,10 +73,19 @@ class SettingsScreen extends ConsumerWidget {
                         );
                       },
               ),
-              const _SettingItem(
+              _SettingItem(
                 Icons.key_outlined,
-                'API Keys',
-                'Not Connected',
+                'Exchange Accounts',
+                'Manage API connections',
+                onTap: user == null
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ExchangeAccountsScreen(),
+                          ),
+                        );
+                      },
               ),
             ]),
             const SizedBox(height: AppSpacing.lg),
