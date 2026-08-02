@@ -12,7 +12,9 @@ import '../auth/providers/auth_state.dart';
 import '../exchange_accounts/exchange_accounts_screen.dart';
 import '../alerts/providers/backend_price_alert_provider.dart';
 import '../watchlist/providers/backend_watchlist_provider.dart';
+import 'providers/backend_notification_preferences_provider.dart';
 import 'change_password_screen.dart';
+import 'widgets/notification_preferences_section.dart';
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -42,8 +44,9 @@ class SettingsScreen extends ConsumerWidget {
               ),
               _SettingItem(Icons.speed, 'Risk Level', 'Moderate'),
               _SettingItem(Icons.attach_money, 'Base Currency', 'USDT'),
-              _SettingItem(Icons.notifications_none, 'Trade Alerts', 'Enabled'),
             ]),
+            const SizedBox(height: AppSpacing.lg),
+            NotificationPreferencesSection(enabled: authState.isAuthenticated),
             const SizedBox(height: AppSpacing.lg),
             const Text('AI Assistant', style: AppTextStyles.title),
             const SizedBox(height: AppSpacing.sm),
@@ -293,6 +296,8 @@ class SettingsScreen extends ConsumerWidget {
       ref.invalidate(backendWatchlistProvider);
 
       ref.invalidate(backendPriceAlertProvider);
+
+      ref.invalidate(backendNotificationPreferencesProvider);
       if (!context.mounted) {
         return;
       }
@@ -364,6 +369,8 @@ class SettingsScreen extends ConsumerWidget {
     ref.invalidate(backendWatchlistProvider);
 
     ref.invalidate(backendPriceAlertProvider);
+
+    ref.invalidate(backendNotificationPreferencesProvider);
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
       (_) => false,

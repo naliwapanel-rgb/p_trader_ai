@@ -5,6 +5,7 @@ import '../../core/auth/session_expiry_provider.dart';
 import '../exchange_accounts/providers/exchange_account_provider.dart';
 import '../portfolio/providers/live_portfolio_provider.dart';
 import '../alerts/providers/backend_price_alert_provider.dart';
+import '../settings/providers/backend_notification_preferences_provider.dart';
 import '../watchlist/providers/backend_watchlist_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
@@ -51,6 +52,7 @@ class _AuthSessionExpiryListenerState
       ref.invalidate(livePortfolioProvider);
       ref.invalidate(backendWatchlistProvider);
       ref.invalidate(backendPriceAlertProvider);
+      ref.invalidate(backendNotificationPreferencesProvider);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
           return;
