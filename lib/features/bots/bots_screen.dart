@@ -8,6 +8,7 @@ import '../../core/widgets/glass_card.dart';
 import 'data/backend_trading_bot.dart';
 import 'providers/backend_trading_bot_provider.dart';
 import 'providers/backend_trading_bot_state.dart';
+import 'widgets/add_trading_bot_dialog.dart';
 
 class BotsScreen extends ConsumerStatefulWidget {
   const BotsScreen({super.key});
@@ -49,6 +50,13 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
                 : () => ref.read(backendTradingBotProvider.notifier).loadBots(),
             icon: const Icon(Icons.refresh),
           ),
+          IconButton(
+            tooltip: 'Create trading bot',
+            onPressed: state.isMutating
+                ? null
+                : () => _showCreateDialog(context),
+            icon: const Icon(Icons.add_circle_outline),
+          ),
         ],
       ),
       body: RefreshIndicator(
@@ -79,7 +87,7 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               if (state.bots.isEmpty)
-                _emptyState()
+                _emptyState(context)
               else
                 ...state.bots.map(_botCard),
               const SizedBox(height: AppSpacing.xl),
@@ -174,7 +182,7 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
     );
   }
 
-  Widget _emptyState() {
+  Widget _emptyState(BuildContext context) {
     return GlassCard(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
@@ -193,6 +201,13 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
               'will appear here.',
               textAlign: TextAlign.center,
               style: AppTextStyles.body,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton.icon(
+              key: const Key('create-first-bot-button'),
+              onPressed: () => _showCreateDialog(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Create First Bot'),
             ),
           ],
         ),
@@ -351,6 +366,15 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showCreateDialog(BuildContext context) async {
+    ref.read(backendTradingBotProvider.notifier).clearMessages();
+
+    await showDialog<BackendTradingBot>(
+      context: context,
+      builder: (_) => const AddTradingBotDialog(),
     );
   }
 
