@@ -69,6 +69,7 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
             if (state.errorMessage != null) _errorBanner(state.errorMessage!),
+            if (state.infoMessage != null) _infoBanner(state.infoMessage!),
             if (state.isLoading && !state.hasLoaded)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 100),
@@ -89,7 +90,7 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
               if (state.bots.isEmpty)
                 _emptyState(context)
               else
-                ...state.bots.map(_botCard),
+                ...state.bots.map((bot) => _botCard(state, bot)),
               const SizedBox(height: AppSpacing.xl),
             ],
           ],
@@ -215,8 +216,9 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
     );
   }
 
-  Widget _botCard(BackendTradingBot bot) {
+  Widget _botCard(BackendTradingBotState state, BackendTradingBot bot) {
     final color = _statusColor(bot.status);
+    final busy = state.isBotBusy(bot.id);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -285,13 +287,25 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
               ),
             ],
             const SizedBox(height: AppSpacing.md),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showDetails(bot),
-                icon: const Icon(Icons.info_outline),
-                label: const Text('Details'),
-              ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => _showDetails(bot),
+                  icon: const Icon(Icons.info_outline),
+                  label: const Text('Details'),
+                ),
+                for (final action in _lifecycleActions(bot.status))
+                  FilledButton.tonalIcon(
+                    key: Key('bot-${bot.id}-${action.routeValue}-button'),
+                    onPressed: busy
+                        ? null
+                        : () => _performLifecycle(bot.id, action),
+                    icon: Icon(_actionIcon(action)),
+                    label: Text(_actionLabel(action)),
+                  ),
+              ],
             ),
           ],
         ),
@@ -369,6 +383,39 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
     );
   }
 
+  Widget _infoBanner(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: AppColors.success.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppSpacing.radius),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: AppColors.success),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: AppColors.success),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Dismiss message',
+              onPressed: () =>
+                  ref.read(backendTradingBotProvider.notifier).clearMessages(),
+              icon: const Icon(Icons.close),
+              color: AppColors.success,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showCreateDialog(BuildContext context) async {
     ref.read(backendTradingBotProvider.notifier).clearMessages();
 
@@ -376,6 +423,15 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
       context: context,
       builder: (_) => const AddTradingBotDialog(),
     );
+  }
+
+  Future<void> _performLifecycle(
+    int botId,
+    TradingBotLifecycleAction action,
+  ) async {
+    await ref
+        .read(backendTradingBotProvider.notifier)
+        .performLifecycle(botId: botId, action: action);
   }
 
   Future<void> _showDetails(BackendTradingBot bot) {
@@ -436,6 +492,49 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
         ],
       ),
     );
+  }
+
+  List<TradingBotLifecycleAction> _lifecycleActions(TradingBotStatus status) {
+    return switch (status) {
+      TradingBotStatus.draft => const <TradingBotLifecycleAction>[
+        TradingBotLifecycleAction.prepare,
+      ],
+      TradingBotStatus.stopped => const <TradingBotLifecycleAction>[
+        TradingBotLifecycleAction.start,
+      ],
+      TradingBotStatus.running => const <TradingBotLifecycleAction>[
+        TradingBotLifecycleAction.pause,
+        TradingBotLifecycleAction.stop,
+      ],
+      TradingBotStatus.paused => const <TradingBotLifecycleAction>[
+        TradingBotLifecycleAction.resume,
+      ],
+      TradingBotStatus.error => const <TradingBotLifecycleAction>[
+        TradingBotLifecycleAction.stop,
+      ],
+      TradingBotStatus.starting ||
+      TradingBotStatus.archived => const <TradingBotLifecycleAction>[],
+    };
+  }
+
+  String _actionLabel(TradingBotLifecycleAction action) {
+    return switch (action) {
+      TradingBotLifecycleAction.prepare => 'Prepare',
+      TradingBotLifecycleAction.start => 'Start',
+      TradingBotLifecycleAction.pause => 'Pause',
+      TradingBotLifecycleAction.resume => 'Resume',
+      TradingBotLifecycleAction.stop => 'Stop',
+    };
+  }
+
+  IconData _actionIcon(TradingBotLifecycleAction action) {
+    return switch (action) {
+      TradingBotLifecycleAction.prepare => Icons.build_outlined,
+      TradingBotLifecycleAction.start => Icons.play_arrow,
+      TradingBotLifecycleAction.pause => Icons.pause,
+      TradingBotLifecycleAction.resume => Icons.play_arrow,
+      TradingBotLifecycleAction.stop => Icons.stop,
+    };
   }
 
   Color _statusColor(TradingBotStatus status) {
