@@ -305,6 +305,17 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
                     icon: Icon(_actionIcon(action)),
                     label: Text(_actionLabel(action)),
                   ),
+                if (!bot.status.isActive)
+                  OutlinedButton.icon(
+                    key: Key('bot-${bot.id}-delete-button'),
+                    onPressed: busy ? null : () => _confirmDelete(bot),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.danger,
+                      side: const BorderSide(color: AppColors.danger),
+                    ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete'),
+                  ),
               ],
             ),
           ],
@@ -423,6 +434,43 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
       context: context,
       builder: (_) => const AddTradingBotDialog(),
     );
+  }
+
+  Future<void> _confirmDelete(BackendTradingBot bot) async {
+    ref.read(backendTradingBotProvider.notifier).clearMessages();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Trading Bot?'),
+        content: Text(
+          'Delete "${bot.name}" permanently? '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            key: const Key('confirm-delete-bot-button'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Delete Bot'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    await ref.read(backendTradingBotProvider.notifier).deleteBot(bot.id);
   }
 
   Future<void> _performLifecycle(
