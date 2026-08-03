@@ -10,6 +10,8 @@ import '../watchlist/providers/backend_watchlist_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
 
+import '../bots/providers/backend_trading_bot_provider.dart';
+
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class AuthSessionExpiryListener extends ConsumerStatefulWidget {
@@ -52,6 +54,7 @@ class _AuthSessionExpiryListenerState
       ref.invalidate(livePortfolioProvider);
       ref.invalidate(backendWatchlistProvider);
       ref.invalidate(backendPriceAlertProvider);
+      ref.invalidate(backendTradingBotProvider);
       ref.invalidate(backendNotificationPreferencesProvider);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {

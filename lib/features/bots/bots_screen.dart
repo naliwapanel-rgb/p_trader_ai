@@ -1,108 +1,145 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/glass_card.dart';
+import 'data/backend_trading_bot.dart';
+import 'providers/backend_trading_bot_provider.dart';
+import 'providers/backend_trading_bot_state.dart';
 
-class BotsScreen extends StatelessWidget {
+class BotsScreen extends ConsumerStatefulWidget {
   const BotsScreen({super.key});
 
   @override
+  ConsumerState<BotsScreen> createState() => _BotsScreenState();
+}
+
+class _BotsScreenState extends ConsumerState<BotsScreen> {
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final state = ref.read(backendTradingBotProvider);
+
+      if (!state.hasLoaded && !state.isLoading) {
+        ref.read(backendTradingBotProvider.notifier).loadBots();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bots = [
-      {
-        'name': 'Triangular AI',
-        'type': 'Arbitrage Bot',
-        'status': 'Running',
-        'profit': '+\$35.40',
-        'confidence': '93%',
-        'icon': Icons.change_circle_outlined,
-        'color': AppColors.primary,
-        'active': true,
-      },
-      {
-        'name': 'Scalper AI',
-        'type': 'Short-term Bot',
-        'status': 'Running',
-        'profit': '+\$21.80',
-        'confidence': '88%',
-        'icon': Icons.bolt_outlined,
-        'color': AppColors.success,
-        'active': true,
-      },
-      {
-        'name': 'Grid AI',
-        'type': 'Grid Trading Bot',
-        'status': 'Paused',
-        'profit': '+\$5.20',
-        'confidence': '74%',
-        'icon': Icons.grid_view_outlined,
-        'color': AppColors.warning,
-        'active': false,
-      },
-      {
-        'name': 'Cross Exchange',
-        'type': 'Spread Scanner',
-        'status': 'Offline',
-        'profit': '\$0.00',
-        'confidence': '0%',
-        'icon': Icons.compare_arrows_outlined,
-        'color': AppColors.danger,
-        'active': false,
-      },
-    ];
+    final state = ref.watch(backendTradingBotProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trading Bots'),
         actions: [
           IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Refresh trading bots',
+            onPressed: state.isLoading
+                ? null
+                : () => ref.read(backendTradingBotProvider.notifier).loadBots(),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        backgroundColor: AppColors.card,
+        onRefresh: () =>
+            ref.read(backendTradingBotProvider.notifier).loadBots(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AppSpacing.md),
           children: [
-            _summary(context),
-            const SizedBox(height: AppSpacing.lg),
-            const Text('My Bots', style: AppTextStyles.title),
-            const SizedBox(height: AppSpacing.sm),
-            ...bots.map((bot) => _botCard(bot)),
-            const SizedBox(height: AppSpacing.xl),
+            if (state.errorMessage != null) _errorBanner(state.errorMessage!),
+            if (state.isLoading && !state.hasLoaded)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 100),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
+              _summary(state),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('My Bots', style: AppTextStyles.title),
+                  ),
+                  Text('${state.bots.length} total', style: AppTextStyles.body),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              if (state.bots.isEmpty)
+                _emptyState()
+              else
+                ...state.bots.map(_botCard),
+              const SizedBox(height: AppSpacing.xl),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _summary(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _summaryCard(
-            title: 'Active Bots',
-            value: '3',
-            subtitle: 'Running now',
-            icon: Icons.smart_toy_outlined,
-            color: AppColors.primary,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _summaryCard(
-            title: 'Profit Today',
-            value: '+\$62.40',
-            subtitle: '+2.14%',
-            icon: Icons.trending_up,
-            color: AppColors.success,
-          ),
-        ),
-      ],
+  Widget _summary(BackendTradingBotState state) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final active = _summaryCard(
+          title: 'Active Bots',
+          value: '${state.activeBots.length}',
+          subtitle: 'Running or paused',
+          icon: Icons.smart_toy_outlined,
+          color: AppColors.primary,
+        );
+
+        final running = _summaryCard(
+          title: 'Running',
+          value: '${state.runningBots.length}',
+          subtitle: 'Executing now',
+          icon: Icons.play_circle_outline,
+          color: AppColors.success,
+        );
+
+        final safe = _summaryCard(
+          title: 'Safe Mode',
+          value:
+              '${state.bots.where((bot) => bot.paperTrading || bot.dryRun).length}',
+          subtitle: 'Paper or dry run',
+          icon: Icons.shield_outlined,
+          color: AppColors.warning,
+        );
+
+        if (constraints.maxWidth < 720) {
+          return Column(
+            children: [
+              active,
+              const SizedBox(height: AppSpacing.sm),
+              running,
+              const SizedBox(height: AppSpacing.sm),
+              safe,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: active),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: running),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: safe),
+          ],
+        );
+      },
     );
   }
 
@@ -114,31 +151,57 @@ class BotsScreen extends StatelessWidget {
     required Color color,
   }) {
     return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
           CircleAvatar(
-            radius: 20,
+            radius: 22,
             backgroundColor: color.withValues(alpha: 0.15),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Text(title, style: AppTextStyles.body),
-          const SizedBox(height: AppSpacing.xs),
-          Text(value, style: AppTextStyles.heading),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            subtitle,
-            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTextStyles.body),
+                Text(value, style: AppTextStyles.heading),
+                Text(subtitle, style: TextStyle(color: color, fontSize: 12)),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _botCard(Map<String, Object> bot) {
-    final color = bot['color'] as Color;
-    final active = bot['active'] as bool;
+  Widget _emptyState() {
+    return GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.smart_toy_outlined,
+              size: 58,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const Text('No trading bots yet', style: AppTextStyles.title),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Your authenticated trading bots '
+              'will appear here.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _botCard(BackendTradingBot bot) {
+    final color = _statusColor(bot.status);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -147,92 +210,73 @@ class BotsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
-                  radius: 24,
+                  radius: 23,
                   backgroundColor: color.withValues(alpha: 0.15),
-                  child: Icon(bot['icon'] as IconData, color: color),
+                  child: Icon(Icons.smart_toy_outlined, color: color),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(bot['name'].toString(), style: AppTextStyles.title),
-                      Text(bot['type'].toString(), style: AppTextStyles.body),
+                      Text(bot.name, style: AppTextStyles.title),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '${bot.symbol} • '
+                        '${bot.timeframe.backendValue} • '
+                        '${bot.category.backendValue.toUpperCase()}',
+                        style: AppTextStyles.body,
+                      ),
                     ],
                   ),
                 ),
-                Switch(
-                  value: active,
-                  activeThumbColor: AppColors.primary,
-                  onChanged: (_) {},
-                ),
+                _statusChip(bot.status.backendValue, color),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            Row(
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: [
-                _miniInfo(
-                  label: 'Status',
-                  value: bot['status'].toString(),
-                  color: active ? AppColors.success : AppColors.warning,
+                _metricChip(
+                  'Strategy',
+                  _strategyLabel(bot.strategyType),
+                  AppColors.primary,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                _miniInfo(
-                  label: 'Profit',
-                  value: bot['profit'].toString(),
-                  color: AppColors.success,
+                _metricChip(
+                  'Risk',
+                  '${bot.riskPerTradePercent.toStringAsFixed(2)}%',
+                  AppColors.warning,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                _miniInfo(
-                  label: 'AI Confidence',
-                  value: bot['confidence'].toString(),
-                  color: color,
+                _metricChip(
+                  'Max Position',
+                  '\$${bot.maxPositionValueUsd.toStringAsFixed(2)}',
+                  AppColors.success,
                 ),
+                if (bot.paperTrading)
+                  _metricChip('Mode', 'Paper', AppColors.primary),
+                if (bot.dryRun)
+                  _metricChip('Safety', 'Dry Run', AppColors.success),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(50),
-              child: LinearProgressIndicator(
-                value: active ? 0.88 : 0.35,
-                minHeight: 7,
-                color: color,
-                backgroundColor: AppColors.divider,
+            if (bot.lastError != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                bot.lastError!,
+                style: const TextStyle(color: AppColors.danger),
               ),
-            ),
+            ],
             const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.divider),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppSpacing.radius),
-                      ),
-                    ),
-                    child: const Text('Details'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {},
-                    style: FilledButton.styleFrom(
-                      backgroundColor: color.withValues(alpha: 0.2),
-                      foregroundColor: color,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppSpacing.radius),
-                      ),
-                    ),
-                    child: const Text('Configure'),
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _showDetails(bot),
+                icon: const Icon(Icons.info_outline),
+                label: const Text('Details'),
+              ),
             ),
           ],
         ),
@@ -240,31 +284,158 @@ class BotsScreen extends StatelessWidget {
     );
   }
 
-  Widget _miniInfo({
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Expanded(
+  Widget _metricChip(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _statusChip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _errorBanner(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider),
+          color: AppColors.danger.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppSpacing.radius),
+          border: Border.all(color: AppColors.danger.withValues(alpha: 0.4)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(label, style: AppTextStyles.body.copyWith(fontSize: 12)),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              value,
-              style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            const Icon(Icons.error_outline, color: AppColors.danger),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: AppColors.danger),
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showDetails(BackendTradingBot bot) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(bot.name, style: AppTextStyles.heading),
+              const SizedBox(height: AppSpacing.md),
+              _detailRow('Status', bot.status.backendValue),
+              _detailRow('Symbol', bot.symbol),
+              _detailRow('Strategy', _strategyLabel(bot.strategyType)),
+              _detailRow('Timeframe', bot.timeframe.backendValue),
+              _detailRow('Paper trading', bot.paperTrading ? 'Yes' : 'No'),
+              _detailRow('Dry run', bot.dryRun ? 'Yes' : 'No'),
+              _detailRow(
+                'Maximum position',
+                '\$${bot.maxPositionValueUsd.toStringAsFixed(2)}',
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: AppTextStyles.body)),
+          const SizedBox(width: AppSpacing.md),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _statusColor(TradingBotStatus status) {
+    return switch (status) {
+      TradingBotStatus.running => AppColors.success,
+      TradingBotStatus.starting || TradingBotStatus.paused => AppColors.warning,
+      TradingBotStatus.error => AppColors.danger,
+      TradingBotStatus.draft => AppColors.primary,
+      TradingBotStatus.stopped ||
+      TradingBotStatus.archived => AppColors.textSecondary,
+    };
+  }
+
+  String _strategyLabel(TradingBotStrategyType strategy) {
+    return switch (strategy) {
+      TradingBotStrategyType.ruleBased => 'Rule Based',
+      TradingBotStrategyType.momentum => 'Momentum',
+      TradingBotStrategyType.trend => 'Trend',
+      TradingBotStrategyType.meanReversion => 'Mean Reversion',
+      TradingBotStrategyType.scalping => 'Scalping',
+      TradingBotStrategyType.grid => 'Grid',
+      TradingBotStrategyType.dca => 'DCA',
+      TradingBotStrategyType.arbitrage => 'Arbitrage',
+      TradingBotStrategyType.custom => 'Custom',
+    };
   }
 }

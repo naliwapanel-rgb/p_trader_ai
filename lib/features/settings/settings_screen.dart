@@ -17,6 +17,8 @@ import 'change_password_screen.dart';
 import 'widgets/notification_preferences_section.dart';
 import 'edit_profile_screen.dart';
 
+import '../bots/providers/backend_trading_bot_provider.dart';
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -297,6 +299,7 @@ class SettingsScreen extends ConsumerWidget {
 
       ref.invalidate(backendPriceAlertProvider);
 
+      ref.invalidate(backendTradingBotProvider);
       ref.invalidate(backendNotificationPreferencesProvider);
       if (!context.mounted) {
         return;
@@ -370,6 +373,7 @@ class SettingsScreen extends ConsumerWidget {
 
     ref.invalidate(backendPriceAlertProvider);
 
+    ref.invalidate(backendTradingBotProvider);
     ref.invalidate(backendNotificationPreferencesProvider);
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
