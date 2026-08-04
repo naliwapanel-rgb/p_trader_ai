@@ -10,6 +10,7 @@ import 'data/backend_strategy_template.dart';
 import 'providers/backend_strategy_template_provider.dart';
 import 'providers/backend_strategy_template_state.dart';
 import 'widgets/add_strategy_template_dialog.dart';
+import 'widgets/edit_strategy_template_dialog.dart';
 
 enum _OwnedTemplateFilter { all, draft, published, archived }
 
@@ -224,6 +225,7 @@ class _StrategyTemplatesScreenState
         Expanded(
           child: _templateList(
             templates: templates,
+            canEdit: true,
             loading: state.isLoadingOwned,
             loaded: state.hasLoadedOwned,
             emptyTitle: _ownedEmptyTitle(_ownedFilter),
@@ -238,6 +240,7 @@ class _StrategyTemplatesScreenState
   Widget _publicTab(BackendStrategyTemplateState state) {
     return _templateList(
       templates: state.publicTemplates,
+      canEdit: false,
       loading: state.isLoadingPublic,
       loaded: state.hasLoadedPublic,
       emptyTitle: 'No public templates',
@@ -265,6 +268,7 @@ class _StrategyTemplatesScreenState
 
   Widget _templateList({
     required List<BackendStrategyTemplate> templates,
+    required bool canEdit,
     required bool loading,
     required bool loaded,
     required String emptyTitle,
@@ -289,7 +293,9 @@ class _StrategyTemplatesScreenState
           if (templates.isEmpty)
             _emptyState(title: emptyTitle, message: emptyMessage)
           else
-            ...templates.map(_templateCard),
+            ...templates.map(
+              (template) => _templateCard(template, canEdit: canEdit),
+            ),
           const SizedBox(height: AppSpacing.xl),
         ],
       ),
@@ -325,8 +331,13 @@ class _StrategyTemplatesScreenState
     );
   }
 
-  Widget _templateCard(BackendStrategyTemplate template) {
+  Widget _templateCard(
+    BackendStrategyTemplate template, {
+    required bool canEdit,
+  }) {
     final statusColor = _statusColor(template.status);
+    final state = ref.watch(backendStrategyTemplateProvider);
+    final isBusy = state.isTemplateBusy(template.id);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -404,7 +415,8 @@ class _StrategyTemplatesScreenState
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               key: Key('template-${template.id}-details-button'),
-              onPressed: () => _showDetails(template),
+              onPressed: () =>
+                  _showDetails(template, canEdit: canEdit, isBusy: isBusy),
               icon: const Icon(Icons.info_outline),
               label: const Text('Details'),
             ),
@@ -503,7 +515,30 @@ class _StrategyTemplatesScreenState
     );
   }
 
-  Future<void> _showDetails(BackendStrategyTemplate template) {
+  Future<void> _showEditDialog(BackendStrategyTemplate template) async {
+    final request = await showDialog<StrategyTemplateUpdateRequest>(
+      context: context,
+      builder: (_) => EditStrategyTemplateDialog(template: template),
+    );
+
+    if (request == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _loadErrorMessage = null;
+    });
+
+    await ref
+        .read(backendStrategyTemplateProvider.notifier)
+        .updateTemplate(templateId: template.id, request: request);
+  }
+
+  Future<void> _showDetails(
+    BackendStrategyTemplate template, {
+    required bool canEdit,
+    required bool isBusy,
+  }) {
     return showDialog<void>(
       context: context,
       builder: (context) {
@@ -556,6 +591,18 @@ class _StrategyTemplatesScreenState
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
+            if (canEdit)
+              FilledButton.icon(
+                key: Key('template-${template.id}-edit-button'),
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        Navigator.of(context).pop();
+                        await _showEditDialog(template);
+                      },
+                icon: const Icon(Icons.edit_outlined),
+                label: Text(isBusy ? 'Updating...' : 'Edit'),
+              ),
           ],
         );
       },

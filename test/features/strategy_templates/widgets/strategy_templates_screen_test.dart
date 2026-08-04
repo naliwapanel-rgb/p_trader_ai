@@ -160,6 +160,114 @@ void main() {
       expect(find.text('Rejected Template'), findsNothing);
     });
 
+    testWidgets('edits an owned strategy template', (tester) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 4,
+            name: 'Editable Draft',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-4-details-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-4-edit-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Strategy Template'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('edit-template-name-field')),
+        'Edited Draft',
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const Key('save-template-changes-button')),
+      );
+      await tester.tap(find.byKey(const Key('save-template-changes-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.updateCalls, 1);
+      expect(repository.lastUpdateTemplateId, 4);
+      expect(repository.lastUpdateRequest?.name, 'Edited Draft');
+      expect(find.text('Edited Draft'), findsOneWidget);
+      expect(
+        find.text('Strategy template updated successfully.'),
+        findsOneWidget,
+      );
+      expect(find.text('Edit Strategy Template'), findsNothing);
+    });
+
+    testWidgets('does not offer editing for public templates', (tester) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 5,
+            name: 'Public Read Only',
+            status: StrategyTemplateStatus.published,
+            visibility: StrategyTemplateVisibility.publicTemplate,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('public-templates-tab')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-5-details-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Public Read Only'), findsWidgets);
+      expect(find.byKey(const Key('template-5-edit-button')), findsNothing);
+    });
+
+    testWidgets('shows backend errors when template editing fails', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 6,
+            name: 'Original Draft',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+        updateError: const AppException('Template update was rejected'),
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-6-details-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-6-edit-button')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('edit-template-name-field')),
+        'Rejected Edit',
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const Key('save-template-changes-button')),
+      );
+      await tester.tap(find.byKey(const Key('save-template-changes-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.updateCalls, 1);
+      expect(repository.lastUpdateTemplateId, 6);
+      expect(repository.lastUpdateRequest?.name, 'Rejected Edit');
+      expect(find.text('Template update was rejected'), findsOneWidget);
+      expect(find.text('Original Draft'), findsOneWidget);
+      expect(find.text('Rejected Edit'), findsNothing);
+    });
+
     testWidgets('shows repository load errors', (tester) async {
       final repository = _ReadOnlyRepository(
         listOwnedError: const AppException(
@@ -206,18 +314,23 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
     List<BackendStrategyTemplate>? ownedTemplates,
     this.listOwnedError,
     this.createError,
+    this.updateError,
   }) : ownedTemplates = ownedTemplates ?? <BackendStrategyTemplate>[];
 
   final List<BackendStrategyTemplate> ownedTemplates;
 
   final AppException? listOwnedError;
   final AppException? createError;
+  final AppException? updateError;
 
   int listOwnedCalls = 0;
   int listPublicCalls = 0;
   int createCalls = 0;
+  int updateCalls = 0;
 
   StrategyTemplateCreateRequest? lastCreateRequest;
+  StrategyTemplateUpdateRequest? lastUpdateRequest;
+  int? lastUpdateTemplateId;
 
   @override
   Future<List<BackendStrategyTemplate>> listOwned({
@@ -289,8 +402,34 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   Future<BackendStrategyTemplate> updateTemplate({
     required int templateId,
     required StrategyTemplateUpdateRequest request,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    updateCalls += 1;
+    lastUpdateTemplateId = templateId;
+    lastUpdateRequest = request;
+
+    final error = updateError;
+    if (error != null) {
+      throw error;
+    }
+
+    final index = ownedTemplates.indexWhere(
+      (template) => template.id == templateId,
+    );
+
+    if (index < 0) {
+      throw StateError('Strategy template not found');
+    }
+
+    final existing = ownedTemplates[index];
+    final updated = _template(
+      id: existing.id,
+      name: request.name?.trim() ?? existing.name,
+      status: existing.status,
+      visibility: request.visibility ?? existing.visibility,
+    );
+
+    ownedTemplates[index] = updated;
+    return updated;
   }
 
   @override
