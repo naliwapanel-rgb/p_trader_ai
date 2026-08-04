@@ -9,6 +9,7 @@ import 'data/backend_trading_bot.dart';
 import 'providers/backend_trading_bot_provider.dart';
 import 'providers/backend_trading_bot_state.dart';
 import 'widgets/add_trading_bot_dialog.dart';
+import 'widgets/edit_trading_bot_dialog.dart';
 
 class BotsScreen extends ConsumerStatefulWidget {
   const BotsScreen({super.key});
@@ -307,6 +308,13 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
                   ),
                 if (!bot.status.isActive)
                   OutlinedButton.icon(
+                    key: Key('bot-${bot.id}-edit-button'),
+                    onPressed: busy ? null : () => _showEditDialog(bot),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit'),
+                  ),
+                if (!bot.status.isActive)
+                  OutlinedButton.icon(
                     key: Key('bot-${bot.id}-delete-button'),
                     onPressed: busy ? null : () => _confirmDelete(bot),
                     style: OutlinedButton.styleFrom(
@@ -433,6 +441,19 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
     await showDialog<BackendTradingBot>(
       context: context,
       builder: (_) => const AddTradingBotDialog(),
+    );
+  }
+
+  Future<void> _showEditDialog(BackendTradingBot bot) async {
+    if (bot.status.isActive) {
+      return;
+    }
+
+    ref.read(backendTradingBotProvider.notifier).clearMessages();
+
+    await showDialog<BackendTradingBot>(
+      context: context,
+      builder: (_) => EditTradingBotDialog(bot: bot),
     );
   }
 
