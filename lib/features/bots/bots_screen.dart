@@ -8,6 +8,7 @@ import '../../core/widgets/glass_card.dart';
 import 'data/backend_trading_bot.dart';
 import 'providers/backend_trading_bot_provider.dart';
 import 'providers/backend_trading_bot_state.dart';
+import '../strategy_templates/strategy_templates_screen.dart';
 import 'widgets/add_trading_bot_dialog.dart';
 import 'widgets/edit_trading_bot_dialog.dart';
 
@@ -44,6 +45,18 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
       appBar: AppBar(
         title: const Text('Trading Bots'),
         actions: [
+          IconButton(
+            key: const Key('strategy-templates-button'),
+            tooltip: 'View strategy templates',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const StrategyTemplatesScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.description_outlined),
+          ),
           IconButton(
             tooltip: 'Refresh trading bots',
             onPressed: state.isLoading

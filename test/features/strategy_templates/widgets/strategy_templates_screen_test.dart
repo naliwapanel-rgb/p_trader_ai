@@ -1,0 +1,233 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:p_trader_ai/core/errors/app_exception.dart';
+import 'package:p_trader_ai/features/bots/data/backend_trading_bot.dart';
+import 'package:p_trader_ai/features/strategy_templates/data/backend_strategy_template.dart';
+import 'package:p_trader_ai/features/strategy_templates/domain/strategy_template_repository.dart';
+import 'package:p_trader_ai/features/strategy_templates/providers/backend_strategy_template_provider.dart';
+import 'package:p_trader_ai/features/strategy_templates/strategy_templates_screen.dart';
+
+void main() {
+  group('StrategyTemplatesScreen', () {
+    testWidgets('shows owned templates and filters by status', (tester) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 1,
+            name: 'Draft Momentum',
+            status: StrategyTemplateStatus.draft,
+          ),
+          _template(
+            id: 2,
+            name: 'Published Trend',
+            status: StrategyTemplateStatus.published,
+            visibility: StrategyTemplateVisibility.publicTemplate,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      expect(find.text('Draft Momentum'), findsOneWidget);
+
+      expect(find.text('Published Trend'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('owned-filter-draft')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Draft Momentum'), findsOneWidget);
+
+      expect(find.text('Published Trend'), findsNothing);
+    });
+
+    testWidgets('shows published public templates', (tester) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 3,
+            name: 'Community Trend',
+            status: StrategyTemplateStatus.published,
+            visibility: StrategyTemplateVisibility.publicTemplate,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('public-templates-tab')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Community Trend'), findsOneWidget);
+
+      expect(find.text('Visibility: Public'), findsOneWidget);
+
+      expect(repository.listPublicCalls, 1);
+    });
+
+    testWidgets('shows repository load errors', (tester) async {
+      final repository = _ReadOnlyRepository(
+        listOwnedError: const AppException(
+          'Templates are temporarily unavailable',
+        ),
+      );
+
+      await _pumpScreen(tester, repository);
+
+      expect(
+        find.text('Templates are temporarily unavailable'),
+        findsOneWidget,
+      );
+    });
+  });
+}
+
+Future<void> _pumpScreen(
+  WidgetTester tester,
+  StrategyTemplateRepository repository,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        backendStrategyTemplateRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: const MaterialApp(home: StrategyTemplatesScreen()),
+    ),
+  );
+
+  await tester.pumpAndSettle();
+}
+
+class _ReadOnlyRepository implements StrategyTemplateRepository {
+  _ReadOnlyRepository({
+    List<BackendStrategyTemplate>? ownedTemplates,
+    this.listOwnedError,
+  }) : ownedTemplates = ownedTemplates ?? <BackendStrategyTemplate>[];
+
+  final List<BackendStrategyTemplate> ownedTemplates;
+
+  final AppException? listOwnedError;
+
+  int listOwnedCalls = 0;
+  int listPublicCalls = 0;
+
+  @override
+  Future<List<BackendStrategyTemplate>> listOwned({
+    StrategyTemplateStatus? status,
+    StrategyTemplateVisibility? visibility,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    listOwnedCalls += 1;
+
+    final error = listOwnedError;
+
+    if (error != null) {
+      throw error;
+    }
+
+    return ownedTemplates
+        .where(
+          (template) =>
+              (status == null || template.status == status) &&
+              (visibility == null || template.visibility == visibility),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<BackendStrategyTemplate>> listPublic({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    listPublicCalls += 1;
+
+    return ownedTemplates
+        .where(
+          (template) =>
+              template.status == StrategyTemplateStatus.published &&
+              template.visibility == StrategyTemplateVisibility.publicTemplate,
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<BackendStrategyTemplate> getTemplate(int templateId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<BackendStrategyTemplate> createTemplate(
+    StrategyTemplateCreateRequest request,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<BackendStrategyTemplate> updateTemplate({
+    required int templateId,
+    required StrategyTemplateUpdateRequest request,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteTemplate(int templateId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StrategyTemplateActionResult> performAction({
+    required int templateId,
+    required StrategyTemplateAction action,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<BackendTradingBot> createBotFromTemplate({
+    required int templateId,
+    required StrategyTemplateBotCreateRequest request,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+BackendStrategyTemplate _template({
+  required int id,
+  required String name,
+  required StrategyTemplateStatus status,
+  StrategyTemplateVisibility visibility =
+      StrategyTemplateVisibility.privateTemplate,
+}) {
+  final timestamp = DateTime.utc(2026, 8, 4, id);
+
+  return BackendStrategyTemplate(
+    id: id,
+    userId: 7,
+    name: name,
+    description: 'Read-only template',
+    strategyType: TradingBotStrategyType.momentum,
+    symbol: 'BTCUSDT',
+    category: TradingBotCategory.linear,
+    timeframe: TradingBotTimeframe.fiveMinutes,
+    visibility: visibility,
+    paperTrading: true,
+    dryRun: true,
+    riskPerTradePercent: 1,
+    maxPositionValueUsd: 25,
+    maxDailyLossPercent: 3,
+    maxDrawdownPercent: 10,
+    stopLossPercent: 2,
+    takeProfitPercent: 4,
+    strategyConfig: const <String, dynamic>{'period': 14},
+    status: status,
+    version: 1,
+    publishedAt: status == StrategyTemplateStatus.published ? timestamp : null,
+    archivedAt: status == StrategyTemplateStatus.archived ? timestamp : null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  );
+}
