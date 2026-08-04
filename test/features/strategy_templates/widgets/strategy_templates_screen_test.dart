@@ -67,6 +67,99 @@ void main() {
       expect(repository.listPublicCalls, 1);
     });
 
+    testWidgets('creates a template through the creation dialog', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository();
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(
+        find.byKey(const Key('create-strategy-template-screen-button')),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create Strategy Template'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('template-name-field')),
+        'Wired Momentum Template',
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('template-symbol-field')),
+        'ethusdt',
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const Key('create-strategy-template-button')),
+      );
+
+      await tester.tap(
+        find.byKey(const Key('create-strategy-template-button')),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(repository.createCalls, 1);
+      expect(repository.lastCreateRequest?.name, 'Wired Momentum Template');
+      expect(repository.lastCreateRequest?.symbol, 'ETHUSDT');
+      expect(repository.lastCreateRequest?.paperTrading, isTrue);
+      expect(repository.lastCreateRequest?.dryRun, isTrue);
+
+      expect(find.text('Wired Momentum Template'), findsOneWidget);
+
+      expect(
+        find.text('Strategy template created successfully.'),
+        findsOneWidget,
+      );
+
+      expect(find.text('Create Strategy Template'), findsNothing);
+    });
+
+    testWidgets('shows backend errors when template creation fails', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        createError: const AppException('Template creation was rejected'),
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(
+        find.byKey(const Key('create-strategy-template-screen-button')),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('template-name-field')),
+        'Rejected Template',
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('template-symbol-field')),
+        'BTCUSDT',
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const Key('create-strategy-template-button')),
+      );
+
+      await tester.tap(
+        find.byKey(const Key('create-strategy-template-button')),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(repository.createCalls, 1);
+
+      expect(find.text('Template creation was rejected'), findsOneWidget);
+
+      expect(find.text('Rejected Template'), findsNothing);
+    });
+
     testWidgets('shows repository load errors', (tester) async {
       final repository = _ReadOnlyRepository(
         listOwnedError: const AppException(
@@ -88,6 +181,14 @@ Future<void> _pumpScreen(
   WidgetTester tester,
   StrategyTemplateRepository repository,
 ) async {
+  tester.view.physicalSize = const Size(1200, 1600);
+  tester.view.devicePixelRatio = 1;
+
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -104,14 +205,19 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   _ReadOnlyRepository({
     List<BackendStrategyTemplate>? ownedTemplates,
     this.listOwnedError,
+    this.createError,
   }) : ownedTemplates = ownedTemplates ?? <BackendStrategyTemplate>[];
 
   final List<BackendStrategyTemplate> ownedTemplates;
 
   final AppException? listOwnedError;
+  final AppException? createError;
 
   int listOwnedCalls = 0;
   int listPublicCalls = 0;
+  int createCalls = 0;
+
+  StrategyTemplateCreateRequest? lastCreateRequest;
 
   @override
   Future<List<BackendStrategyTemplate>> listOwned({
@@ -161,8 +267,22 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   @override
   Future<BackendStrategyTemplate> createTemplate(
     StrategyTemplateCreateRequest request,
-  ) {
-    throw UnimplementedError();
+  ) async {
+    createCalls += 1;
+    lastCreateRequest = request;
+
+    final error = createError;
+
+    if (error != null) {
+      throw error;
+    }
+
+    return _template(
+      id: 100 + createCalls,
+      name: request.name.trim(),
+      status: StrategyTemplateStatus.draft,
+      visibility: request.visibility,
+    );
   }
 
   @override

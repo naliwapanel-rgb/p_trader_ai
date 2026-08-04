@@ -9,6 +9,7 @@ import '../bots/data/backend_trading_bot.dart';
 import 'data/backend_strategy_template.dart';
 import 'providers/backend_strategy_template_provider.dart';
 import 'providers/backend_strategy_template_state.dart';
+import 'widgets/add_strategy_template_dialog.dart';
 
 enum _OwnedTemplateFilter { all, draft, published, archived }
 
@@ -103,6 +104,12 @@ class _StrategyTemplatesScreenState
           title: const Text('Strategy Templates'),
           actions: [
             IconButton(
+              key: const Key('create-strategy-template-screen-button'),
+              tooltip: 'Create strategy template',
+              onPressed: state.isMutating ? null : _showCreateDialog,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+            IconButton(
               key: const Key('refresh-strategy-templates-button'),
               tooltip: 'Refresh strategy templates',
               onPressed: state.isLoading ? null : _refreshAll,
@@ -147,6 +154,25 @@ class _StrategyTemplatesScreenState
         ),
       ),
     );
+  }
+
+  Future<void> _showCreateDialog() async {
+    final request = await showDialog<StrategyTemplateCreateRequest>(
+      context: context,
+      builder: (_) => const AddStrategyTemplateDialog(),
+    );
+
+    if (request == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _loadErrorMessage = null;
+    });
+
+    await ref
+        .read(backendStrategyTemplateProvider.notifier)
+        .createTemplate(request);
   }
 
   Widget _ownedTab(BackendStrategyTemplateState state) {
