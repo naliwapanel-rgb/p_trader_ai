@@ -573,6 +573,15 @@ class _StrategyTemplatesScreenState
         .deleteTemplate(template.id);
   }
 
+  Future<void> _performLifecycle(
+    int templateId,
+    StrategyTemplateAction action,
+  ) async {
+    await ref
+        .read(backendStrategyTemplateProvider.notifier)
+        .performAction(templateId: templateId, action: action);
+  }
+
   Future<void> _showDetails(
     BackendStrategyTemplate template, {
     required bool canEdit,
@@ -631,6 +640,21 @@ class _StrategyTemplatesScreenState
               child: const Text('Close'),
             ),
             if (canEdit)
+              for (final action in _lifecycleActions(template.status))
+                FilledButton.tonalIcon(
+                  key: Key(
+                    'template-${template.id}-${action.routeValue}-button',
+                  ),
+                  onPressed: isBusy
+                      ? null
+                      : () async {
+                          Navigator.of(context).pop();
+                          await _performLifecycle(template.id, action);
+                        },
+                  icon: Icon(_actionIcon(action)),
+                  label: Text(_actionLabel(action)),
+                ),
+            if (canEdit)
               TextButton.icon(
                 key: Key('template-${template.id}-delete-button'),
                 onPressed: isBusy
@@ -659,6 +683,42 @@ class _StrategyTemplatesScreenState
         );
       },
     );
+  }
+
+  List<StrategyTemplateAction> _lifecycleActions(
+    StrategyTemplateStatus status,
+  ) {
+    return switch (status) {
+      StrategyTemplateStatus.draft => const <StrategyTemplateAction>[
+        StrategyTemplateAction.publish,
+        StrategyTemplateAction.archive,
+      ],
+      StrategyTemplateStatus.published => const <StrategyTemplateAction>[
+        StrategyTemplateAction.unpublish,
+        StrategyTemplateAction.archive,
+      ],
+      StrategyTemplateStatus.archived => const <StrategyTemplateAction>[
+        StrategyTemplateAction.restore,
+      ],
+    };
+  }
+
+  String _actionLabel(StrategyTemplateAction action) {
+    return switch (action) {
+      StrategyTemplateAction.publish => 'Publish',
+      StrategyTemplateAction.unpublish => 'Unpublish',
+      StrategyTemplateAction.archive => 'Archive',
+      StrategyTemplateAction.restore => 'Restore',
+    };
+  }
+
+  IconData _actionIcon(StrategyTemplateAction action) {
+    return switch (action) {
+      StrategyTemplateAction.publish => Icons.publish,
+      StrategyTemplateAction.unpublish => Icons.visibility_off_outlined,
+      StrategyTemplateAction.archive => Icons.archive_outlined,
+      StrategyTemplateAction.restore => Icons.restore,
+    };
   }
 
   Widget _detailRow(String label, String value) {

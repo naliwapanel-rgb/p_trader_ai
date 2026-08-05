@@ -336,6 +336,96 @@ void main() {
       expect(find.text('Protected Draft'), findsOneWidget);
     });
 
+    testWidgets('publishes an owned draft strategy template', (tester) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 9,
+            name: 'Draft Lifecycle Template',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-9-details-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('template-9-publish-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('template-9-archive-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('template-9-unpublish-button')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('template-9-restore-button')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('template-9-publish-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.actionCalls, 1);
+      expect(repository.lastActionTemplateId, 9);
+      expect(repository.lastAction, StrategyTemplateAction.publish);
+
+      expect(find.text('PUBLISHED'), findsOneWidget);
+      expect(find.text('Visibility: Public'), findsOneWidget);
+      expect(
+        find.text('Strategy template published successfully.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('unpublishes an owned published strategy template', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 10,
+            name: 'Published Lifecycle Template',
+            status: StrategyTemplateStatus.published,
+            visibility: StrategyTemplateVisibility.publicTemplate,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-10-details-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('template-10-unpublish-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('template-10-archive-button')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('template-10-publish-button')), findsNothing);
+      expect(find.byKey(const Key('template-10-restore-button')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('template-10-unpublish-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.actionCalls, 1);
+      expect(repository.lastActionTemplateId, 10);
+      expect(repository.lastAction, StrategyTemplateAction.unpublish);
+
+      expect(find.text('DRAFT'), findsOneWidget);
+      expect(find.text('Visibility: Private'), findsOneWidget);
+      expect(
+        find.text('Strategy template unpublished successfully.'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('shows repository load errors', (tester) async {
       final repository = _ReadOnlyRepository(
         listOwnedError: const AppException(
@@ -384,6 +474,7 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
     this.createError,
     this.updateError,
     this.deleteError,
+    this.actionError,
   }) : ownedTemplates = ownedTemplates ?? <BackendStrategyTemplate>[];
 
   final List<BackendStrategyTemplate> ownedTemplates;
@@ -392,17 +483,21 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   final AppException? createError;
   final AppException? updateError;
   final AppException? deleteError;
+  final AppException? actionError;
 
   int listOwnedCalls = 0;
   int listPublicCalls = 0;
   int createCalls = 0;
   int updateCalls = 0;
   int deleteCalls = 0;
+  int actionCalls = 0;
 
   StrategyTemplateCreateRequest? lastCreateRequest;
   StrategyTemplateUpdateRequest? lastUpdateRequest;
   int? lastUpdateTemplateId;
   int? lastDeleteTemplateId;
+  int? lastActionTemplateId;
+  StrategyTemplateAction? lastAction;
 
   @override
   Future<List<BackendStrategyTemplate>> listOwned({
@@ -529,8 +624,57 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   Future<StrategyTemplateActionResult> performAction({
     required int templateId,
     required StrategyTemplateAction action,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    actionCalls += 1;
+    lastActionTemplateId = templateId;
+    lastAction = action;
+
+    final error = actionError;
+    if (error != null) {
+      throw error;
+    }
+
+    final index = ownedTemplates.indexWhere(
+      (template) => template.id == templateId,
+    );
+
+    if (index < 0) {
+      throw StateError('Strategy template not found');
+    }
+
+    final existing = ownedTemplates[index];
+
+    final nextStatus = switch (action) {
+      StrategyTemplateAction.publish => StrategyTemplateStatus.published,
+      StrategyTemplateAction.unpublish => StrategyTemplateStatus.draft,
+      StrategyTemplateAction.archive => StrategyTemplateStatus.archived,
+      StrategyTemplateAction.restore => StrategyTemplateStatus.draft,
+    };
+
+    final nextVisibility = switch (action) {
+      StrategyTemplateAction.publish =>
+        StrategyTemplateVisibility.publicTemplate,
+      StrategyTemplateAction.unpublish || StrategyTemplateAction.restore =>
+        StrategyTemplateVisibility.privateTemplate,
+      StrategyTemplateAction.archive => existing.visibility,
+    };
+
+    final updated = _template(
+      id: existing.id,
+      name: existing.name,
+      status: nextStatus,
+      visibility: nextVisibility,
+    );
+
+    ownedTemplates[index] = updated;
+
+    return StrategyTemplateActionResult(
+      action: action,
+      previousStatus: existing.status,
+      status: nextStatus,
+      changed: existing.status != nextStatus,
+      template: updated,
+    );
   }
 
   @override
