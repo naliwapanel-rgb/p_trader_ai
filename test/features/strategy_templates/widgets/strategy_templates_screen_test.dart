@@ -225,6 +225,7 @@ void main() {
 
       expect(find.text('Public Read Only'), findsWidgets);
       expect(find.byKey(const Key('template-5-edit-button')), findsNothing);
+      expect(find.byKey(const Key('template-5-delete-button')), findsNothing);
     });
 
     testWidgets('shows backend errors when template editing fails', (
@@ -266,6 +267,73 @@ void main() {
       expect(find.text('Template update was rejected'), findsOneWidget);
       expect(find.text('Original Draft'), findsOneWidget);
       expect(find.text('Rejected Edit'), findsNothing);
+    });
+
+    testWidgets('deletes an owned strategy template after confirmation', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 7,
+            name: 'Delete Me',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-7-details-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-7-delete-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete Strategy Template?'), findsOneWidget);
+      expect(repository.deleteCalls, 0);
+
+      await tester.tap(find.byKey(const Key('confirm-delete-template-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.deleteCalls, 1);
+      expect(repository.lastDeleteTemplateId, 7);
+      expect(find.text('Delete Me'), findsNothing);
+      expect(
+        find.text('Strategy template deleted successfully.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows backend errors when template deletion fails', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 8,
+            name: 'Protected Draft',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+        deleteError: const AppException('Template deletion was rejected'),
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-8-details-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-8-delete-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('confirm-delete-template-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.deleteCalls, 1);
+      expect(repository.lastDeleteTemplateId, 8);
+      expect(find.text('Template deletion was rejected'), findsOneWidget);
+      expect(find.text('Protected Draft'), findsOneWidget);
     });
 
     testWidgets('shows repository load errors', (tester) async {
@@ -315,6 +383,7 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
     this.listOwnedError,
     this.createError,
     this.updateError,
+    this.deleteError,
   }) : ownedTemplates = ownedTemplates ?? <BackendStrategyTemplate>[];
 
   final List<BackendStrategyTemplate> ownedTemplates;
@@ -322,15 +391,18 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   final AppException? listOwnedError;
   final AppException? createError;
   final AppException? updateError;
+  final AppException? deleteError;
 
   int listOwnedCalls = 0;
   int listPublicCalls = 0;
   int createCalls = 0;
   int updateCalls = 0;
+  int deleteCalls = 0;
 
   StrategyTemplateCreateRequest? lastCreateRequest;
   StrategyTemplateUpdateRequest? lastUpdateRequest;
   int? lastUpdateTemplateId;
+  int? lastDeleteTemplateId;
 
   @override
   Future<List<BackendStrategyTemplate>> listOwned({
@@ -433,8 +505,24 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   }
 
   @override
-  Future<void> deleteTemplate(int templateId) {
-    throw UnimplementedError();
+  Future<void> deleteTemplate(int templateId) async {
+    deleteCalls += 1;
+    lastDeleteTemplateId = templateId;
+
+    final error = deleteError;
+    if (error != null) {
+      throw error;
+    }
+
+    final index = ownedTemplates.indexWhere(
+      (template) => template.id == templateId,
+    );
+
+    if (index < 0) {
+      throw StateError('Strategy template not found');
+    }
+
+    ownedTemplates.removeAt(index);
   }
 
   @override

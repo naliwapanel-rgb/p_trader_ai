@@ -534,6 +534,45 @@ class _StrategyTemplatesScreenState
         .updateTemplate(templateId: template.id, request: request);
   }
 
+  Future<void> _confirmDelete(BackendStrategyTemplate template) async {
+    ref.read(backendStrategyTemplateProvider.notifier).clearMessages();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Strategy Template?'),
+        content: Text(
+          'Delete "${template.name}" permanently? '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            key: const Key('confirm-delete-template-button'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Delete Template'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    await ref
+        .read(backendStrategyTemplateProvider.notifier)
+        .deleteTemplate(template.id);
+  }
+
   Future<void> _showDetails(
     BackendStrategyTemplate template, {
     required bool canEdit,
@@ -591,6 +630,19 @@ class _StrategyTemplatesScreenState
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
+            if (canEdit)
+              TextButton.icon(
+                key: Key('template-${template.id}-delete-button'),
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        Navigator.of(context).pop();
+                        await _confirmDelete(template);
+                      },
+                icon: const Icon(Icons.delete_outline),
+                label: Text(isBusy ? 'Deleting...' : 'Delete'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+              ),
             if (canEdit)
               FilledButton.icon(
                 key: Key('template-${template.id}-edit-button'),
