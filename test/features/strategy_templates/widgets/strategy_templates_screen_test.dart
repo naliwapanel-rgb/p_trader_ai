@@ -426,6 +426,101 @@ void main() {
       );
     });
 
+    testWidgets('shows backend errors when lifecycle action fails', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 11,
+            name: 'Protected Lifecycle Template',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+        actionError: const AppException(
+          'Template lifecycle action was rejected',
+        ),
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-11-details-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-11-publish-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.actionCalls, 1);
+      expect(repository.lastActionTemplateId, 11);
+      expect(repository.lastAction, StrategyTemplateAction.publish);
+      expect(
+        find.text('Template lifecycle action was rejected'),
+        findsOneWidget,
+      );
+      expect(find.text('Protected Lifecycle Template'), findsOneWidget);
+      expect(find.text('DRAFT'), findsOneWidget);
+      expect(find.text('Visibility: Private'), findsOneWidget);
+    });
+
+    testWidgets('archives and restores an owned strategy template', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 12,
+            name: 'Archive Lifecycle Template',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-12-details-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-12-archive-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.actionCalls, 1);
+      expect(repository.lastActionTemplateId, 12);
+      expect(repository.lastAction, StrategyTemplateAction.archive);
+      expect(find.text('ARCHIVED'), findsOneWidget);
+      expect(find.text('Visibility: Private'), findsOneWidget);
+      expect(
+        find.text('Strategy template archived successfully.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('template-12-details-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('template-12-restore-button')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('template-12-publish-button')), findsNothing);
+      expect(
+        find.byKey(const Key('template-12-unpublish-button')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('template-12-archive-button')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('template-12-restore-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.actionCalls, 2);
+      expect(repository.lastActionTemplateId, 12);
+      expect(repository.lastAction, StrategyTemplateAction.restore);
+      expect(find.text('DRAFT'), findsOneWidget);
+      expect(find.text('Visibility: Private'), findsOneWidget);
+      expect(
+        find.text('Strategy template restored successfully.'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('shows repository load errors', (tester) async {
       final repository = _ReadOnlyRepository(
         listOwnedError: const AppException(
