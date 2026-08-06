@@ -10,6 +10,7 @@ import 'data/backend_strategy_template.dart';
 import 'providers/backend_strategy_template_provider.dart';
 import 'providers/backend_strategy_template_state.dart';
 import 'widgets/add_strategy_template_dialog.dart';
+import 'widgets/create_bot_from_template_dialog.dart';
 import 'widgets/edit_strategy_template_dialog.dart';
 
 enum _OwnedTemplateFilter { all, draft, published, archived }
@@ -534,6 +535,25 @@ class _StrategyTemplatesScreenState
         .updateTemplate(templateId: template.id, request: request);
   }
 
+  Future<void> _showCreateBotDialog(BackendStrategyTemplate template) async {
+    final request = await showDialog<StrategyTemplateBotCreateRequest>(
+      context: context,
+      builder: (_) => CreateBotFromTemplateDialog(template: template),
+    );
+
+    if (request == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _loadErrorMessage = null;
+    });
+
+    await ref
+        .read(backendStrategyTemplateProvider.notifier)
+        .createBotFromTemplate(templateId: template.id, request: request);
+  }
+
   Future<void> _confirmDelete(BackendStrategyTemplate template) async {
     ref.read(backendStrategyTemplateProvider.notifier).clearMessages();
 
@@ -639,6 +659,18 @@ class _StrategyTemplatesScreenState
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
+            if (template.status != StrategyTemplateStatus.archived)
+              FilledButton.tonalIcon(
+                key: Key('template-${template.id}-create-bot-button'),
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        Navigator.of(context).pop();
+                        await _showCreateBotDialog(template);
+                      },
+                icon: const Icon(Icons.smart_toy_outlined),
+                label: Text(isBusy ? 'Creating...' : 'Create Bot'),
+              ),
             if (canEdit)
               for (final action in _lifecycleActions(template.status))
                 FilledButton.tonalIcon(

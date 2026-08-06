@@ -203,6 +203,70 @@ void main() {
       expect(find.text('Edit Strategy Template'), findsNothing);
     });
 
+    testWidgets('creates a bot from an owned draft strategy template', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 13,
+            name: 'Draft Bot Source',
+            status: StrategyTemplateStatus.draft,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-13-details-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('template-13-create-bot-button')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('template-13-create-bot-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create Bot from Template'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('template-bot-name-field')),
+        '  Draft   Momentum Bot  ',
+      );
+      await tester.enterText(
+        find.byKey(const Key('template-bot-exchange-account-field')),
+        '9',
+      );
+      await tester.enterText(
+        find.byKey(const Key('template-bot-description-field')),
+        '  Screen-created bot  ',
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const Key('create-bot-from-template-button')),
+      );
+      await tester.tap(
+        find.byKey(const Key('create-bot-from-template-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.createBotCalls, 1);
+      expect(repository.lastCreateBotTemplateId, 13);
+      expect(repository.lastCreateBotRequest?.name, 'Draft Momentum Bot');
+      expect(repository.lastCreateBotRequest?.exchangeAccountId, 9);
+      expect(
+        repository.lastCreateBotRequest?.description,
+        'Screen-created bot',
+      );
+      expect(
+        find.text('Trading bot created from template successfully.'),
+        findsOneWidget,
+      );
+      expect(find.text('Create Bot from Template'), findsNothing);
+    });
+
     testWidgets('does not offer editing for public templates', (tester) async {
       final repository = _ReadOnlyRepository(
         ownedTemplates: <BackendStrategyTemplate>[
@@ -227,6 +291,140 @@ void main() {
       expect(find.byKey(const Key('template-5-edit-button')), findsNothing);
       expect(find.byKey(const Key('template-5-delete-button')), findsNothing);
     });
+
+    testWidgets('creates a bot from a public published strategy template', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 14,
+            name: 'Public Bot Source',
+            status: StrategyTemplateStatus.published,
+            visibility: StrategyTemplateVisibility.publicTemplate,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('public-templates-tab')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('template-14-details-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('template-14-create-bot-button')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('template-14-edit-button')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('template-14-create-bot-button')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('template-bot-name-field')),
+        'Community Momentum Bot',
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const Key('create-bot-from-template-button')),
+      );
+      await tester.tap(
+        find.byKey(const Key('create-bot-from-template-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.createBotCalls, 1);
+      expect(repository.lastCreateBotTemplateId, 14);
+      expect(repository.lastCreateBotRequest?.name, 'Community Momentum Bot');
+      expect(repository.lastCreateBotRequest?.exchangeAccountId, isNull);
+      expect(repository.lastCreateBotRequest?.description, isNull);
+      expect(
+        find.text('Trading bot created from template successfully.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('does not offer bot creation for archived templates', (
+      tester,
+    ) async {
+      final repository = _ReadOnlyRepository(
+        ownedTemplates: <BackendStrategyTemplate>[
+          _template(
+            id: 15,
+            name: 'Archived Bot Source',
+            status: StrategyTemplateStatus.archived,
+          ),
+        ],
+      );
+
+      await _pumpScreen(tester, repository);
+
+      await tester.tap(find.byKey(const Key('template-15-details-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('template-15-create-bot-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('template-15-restore-button')),
+        findsOneWidget,
+      );
+      expect(repository.createBotCalls, 0);
+    });
+
+    testWidgets(
+      'shows backend errors when bot creation from a template fails',
+      (tester) async {
+        final repository = _ReadOnlyRepository(
+          ownedTemplates: <BackendStrategyTemplate>[
+            _template(
+              id: 16,
+              name: 'Rejected Bot Source',
+              status: StrategyTemplateStatus.draft,
+            ),
+          ],
+          createBotError: const AppException('Bot creation was rejected'),
+        );
+
+        await _pumpScreen(tester, repository);
+
+        await tester.tap(find.byKey(const Key('template-16-details-button')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.byKey(const Key('template-16-create-bot-button')),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          find.byKey(const Key('template-bot-name-field')),
+          'Rejected Template Bot',
+        );
+
+        await tester.ensureVisible(
+          find.byKey(const Key('create-bot-from-template-button')),
+        );
+        await tester.tap(
+          find.byKey(const Key('create-bot-from-template-button')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(repository.createBotCalls, 1);
+        expect(repository.lastCreateBotTemplateId, 16);
+        expect(repository.lastCreateBotRequest?.name, 'Rejected Template Bot');
+        expect(find.text('Bot creation was rejected'), findsOneWidget);
+        expect(find.text('Rejected Bot Source'), findsOneWidget);
+        expect(find.text('Create Bot from Template'), findsNothing);
+        expect(
+          find.text('Trading bot created from template successfully.'),
+          findsNothing,
+        );
+      },
+    );
 
     testWidgets('shows backend errors when template editing fails', (
       tester,
@@ -570,6 +768,7 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
     this.updateError,
     this.deleteError,
     this.actionError,
+    this.createBotError,
   }) : ownedTemplates = ownedTemplates ?? <BackendStrategyTemplate>[];
 
   final List<BackendStrategyTemplate> ownedTemplates;
@@ -579,6 +778,7 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   final AppException? updateError;
   final AppException? deleteError;
   final AppException? actionError;
+  final AppException? createBotError;
 
   int listOwnedCalls = 0;
   int listPublicCalls = 0;
@@ -586,6 +786,7 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   int updateCalls = 0;
   int deleteCalls = 0;
   int actionCalls = 0;
+  int createBotCalls = 0;
 
   StrategyTemplateCreateRequest? lastCreateRequest;
   StrategyTemplateUpdateRequest? lastUpdateRequest;
@@ -593,6 +794,8 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   int? lastDeleteTemplateId;
   int? lastActionTemplateId;
   StrategyTemplateAction? lastAction;
+  int? lastCreateBotTemplateId;
+  StrategyTemplateBotCreateRequest? lastCreateBotRequest;
 
   @override
   Future<List<BackendStrategyTemplate>> listOwned({
@@ -776,8 +979,51 @@ class _ReadOnlyRepository implements StrategyTemplateRepository {
   Future<BackendTradingBot> createBotFromTemplate({
     required int templateId,
     required StrategyTemplateBotCreateRequest request,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    createBotCalls += 1;
+    lastCreateBotTemplateId = templateId;
+    lastCreateBotRequest = request;
+
+    final error = createBotError;
+    if (error != null) {
+      throw error;
+    }
+
+    final template = ownedTemplates.firstWhere(
+      (candidate) => candidate.id == templateId,
+    );
+    final description = request.description?.trim();
+    final timestamp = DateTime.utc(2026, 8, 6, createBotCalls);
+
+    return BackendTradingBot(
+      id: 200 + createBotCalls,
+      userId: template.userId,
+      exchangeAccountId: request.exchangeAccountId,
+      name: request.name.trim().split(RegExp(r'\s+')).join(' '),
+      description: description == null || description.isEmpty
+          ? template.description
+          : description,
+      strategyType: template.strategyType,
+      symbol: template.symbol,
+      category: template.category,
+      timeframe: template.timeframe,
+      status: TradingBotStatus.draft,
+      paperTrading: true,
+      dryRun: true,
+      riskPerTradePercent: template.riskPerTradePercent,
+      maxPositionValueUsd: template.maxPositionValueUsd,
+      maxDailyLossPercent: template.maxDailyLossPercent,
+      maxDrawdownPercent: template.maxDrawdownPercent,
+      stopLossPercent: template.stopLossPercent,
+      takeProfitPercent: template.takeProfitPercent,
+      strategyConfig: template.strategyConfig,
+      lastError: null,
+      startedAt: null,
+      stoppedAt: null,
+      lastRunAt: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    );
   }
 }
 
