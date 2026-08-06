@@ -1,4 +1,4 @@
-package com.example.p_trader_ai
+package com.naliwapanel.ptraderai
 
 import io.flutter.embedding.android.FlutterActivity
 
