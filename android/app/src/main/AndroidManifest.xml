@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:allowBackup="false"
-        android:label="p_trader_ai"
+        android:label="P-TRADER AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
